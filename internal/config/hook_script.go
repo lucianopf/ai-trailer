@@ -129,35 +129,39 @@ case "$TOOL" in
     *)               exit 0 ;;
 esac
 
-# ── Append Trailer ───────────────────────────────────────────────────
+# ── Append Trailers ───────────────────────────────────────────────────
 
-# Skip if trailer already present
-if grep -qF "$TRAILER" "$COMMIT_MSG_FILE" 2>/dev/null; then
-    exit 0
-fi
-
-# Skip if any Co-authored-by already present (avoid duplicates)
+# Check if Co-authored-by already exists (written by the AI tool itself)
+HAS_COAUTHOR=0
 if grep -qi "Co-authored-by:" "$COMMIT_MSG_FILE" 2>/dev/null; then
-    exit 0
+    HAS_COAUTHOR=1
 fi
 
-# Append trailers
-printf "\n%s\n" "$TRAILER" >> "$COMMIT_MSG_FILE"
-printf "Ai-tool: %s\n" "$TOOL" >> "$COMMIT_MSG_FILE"
+# Append Co-authored-by if not already present
+if [ "$HAS_COAUTHOR" -eq 0 ]; then
+    printf "\n%s\n" "$TRAILER" >> "$COMMIT_MSG_FILE"
+fi
 
-# Detect OS
-case "$(uname -s)" in
-    Linux)
-        if grep -qi 'microsoft\|wsl' /proc/version 2>/dev/null; then
-            AI_OS="wsl"
-        else
-            AI_OS="linux"
-        fi ;;
-    Darwin) AI_OS="macos" ;;
-    MINGW*|MSYS*|CYGWIN*) AI_OS="windows" ;;
-    *) AI_OS="$(uname -s | tr '[:upper:]' '[:lower:]')" ;;
-esac
-printf "Ai-os: %s\n" "$AI_OS" >> "$COMMIT_MSG_FILE"
+# Always append Ai-tool if missing (tools often write Co-authored-by but not Ai-*)
+if ! grep -qi "Ai-tool:" "$COMMIT_MSG_FILE" 2>/dev/null; then
+    printf "Ai-tool: %s\n" "$TOOL" >> "$COMMIT_MSG_FILE"
+fi
+
+# Detect OS and append Ai-os if missing
+if ! grep -qi "Ai-os:" "$COMMIT_MSG_FILE" 2>/dev/null; then
+    case "$(uname -s)" in
+        Linux)
+            if grep -qi 'microsoft\|wsl' /proc/version 2>/dev/null; then
+                AI_OS="wsl"
+            else
+                AI_OS="linux"
+            fi ;;
+        Darwin) AI_OS="macos" ;;
+        MINGW*|MSYS*|CYGWIN*) AI_OS="windows" ;;
+        *) AI_OS="$(uname -s | tr '[:upper:]' '[:lower:]')" ;;
+    esac
+    printf "Ai-os: %s\n" "$AI_OS" >> "$COMMIT_MSG_FILE"
+fi
 
 # ── Detect model ────────────────────────────────────────────────────
 detect_model() {
@@ -189,7 +193,9 @@ detect_model() {
 }
 
 AI_MODEL=$(detect_model)
-printf "Ai-model: %s\n" "$AI_MODEL" >> "$COMMIT_MSG_FILE"
+if ! grep -qi "Ai-model:" "$COMMIT_MSG_FILE" 2>/dev/null; then
+    printf "Ai-model: %s\n" "$AI_MODEL" >> "$COMMIT_MSG_FILE"
+fi
 
 # ── Record event (local only) ───────────────────────────────────────
 if command -v ai-trailer &>/dev/null; then
