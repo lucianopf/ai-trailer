@@ -159,6 +159,38 @@ case "$(uname -s)" in
 esac
 printf "Ai-os: %s\n" "$AI_OS" >> "$COMMIT_MSG_FILE"
 
+# ── Detect model ────────────────────────────────────────────────────
+detect_model() {
+    case "$TOOL" in
+        claude-code)
+            # ~/.claude/settings.json → model field
+            MODEL=$(grep -oP '"model"\s*:\s*"\K[^"]+' "$HOME/.claude/settings.json" 2>/dev/null || true)
+            # Also check project-level settings
+            [ -z "$MODEL" ] && MODEL=$(grep -oP '"model"\s*:\s*"\K[^"]+' .claude/settings.json 2>/dev/null || true)
+            ;;
+        hermes)
+            # ~/.hermes/config.yaml → model.default
+            MODEL=$(grep -oP '^\s*default:\s*\K\S+' "$HOME/.hermes/config.yaml" 2>/dev/null || true)
+            ;;
+        codex)
+            MODEL=$(grep -oP '"model"\s*:\s*"\K[^"]+' "$HOME/.codex/config.json" 2>/dev/null || true)
+            ;;
+        opencode|kilocode|gemini-cli|copilot|aider|cody|continue|windsurf|amazon-q|tabnine|coderabbit)
+            # Try reading model from tool config
+            MODEL=""
+            ;;
+        cursor)
+            MODEL="Sonnet (default)"
+            ;;
+        *) MODEL="" ;;
+    esac
+    [ -z "$MODEL" ] && MODEL="unknown"
+    echo "$MODEL"
+}
+
+AI_MODEL=$(detect_model)
+printf "Ai-model: %s\n" "$AI_MODEL" >> "$COMMIT_MSG_FILE"
+
 # ── Record event (local only) ───────────────────────────────────────
 if command -v ai-trailer &>/dev/null; then
     REPO=$(git rev-parse --show-toplevel 2>/dev/null || echo "unknown")
