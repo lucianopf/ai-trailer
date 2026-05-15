@@ -244,6 +244,98 @@ func ConfigureAllInstructionFiles(toolIDs []string) (updatedFiles []string) {
 	return updatedFiles
 }
 
+// revertInstructionFromFile removes the ## Git Attribution block for a
+// specific tool from a file. Returns true if the file was modified.
+func revertInstructionFromFile(path string, cfg instructionConfig) bool {
+	existing, err := os.ReadFile(path)
+	if err != nil {
+		return false // file doesn't exist, nothing to revert
+	}
+
+	content := string(existing)
+
+	// Find the marker for this tool's block
+	marker := "## Git Attribution — " + cfg.toolName
+	start := strings.Index(content, marker)
+	if start < 0 {
+		return false // block not found
+	}
+
+	// Find the end of the block: "This is required for tracking AI-assisted commits.\n"
+	endMarker := "This is required for tracking AI-assisted commits.\n"
+	end := strings.Index(content[start:], endMarker)
+	if end < 0 {
+		// Try without trailing newline
+		endMarker = "This is required for tracking AI-assisted commits."
+		end = strings.Index(content[start:], endMarker)
+		if end < 0 {
+			fmt.Printf("  ⚠  Found start marker but not end marker in %s — skipping\n", path)
+			return false
+		}
+	}
+	end = start + end + len(endMarker)
+
+	// Remove leading newlines before the block to avoid leaving gaps
+	// Walk back from start to find preceding newlines
+	trimStart := start
+	for trimStart > 0 && (content[trimStart-1] == '\n' || content[trimStart-1] == '\r') {
+		trimStart--
+	}
+	// Leave exactly one trailing newline after removal
+	cleaned := content[:trimStart] + content[end:]
+
+	if err := os.WriteFile(path, []byte(cleaned), 0644); err != nil {
+		fmt.Printf("  ✗ Error reverting %s: %v\n", path, err)
+		return false
+	}
+	fmt.Printf("  ✓ Reverted %s (removed %s block)\n", path, cfg.toolName)
+	return true
+}
+
+// RevertInstructionFiles removes all injected ## Git Attribution blocks
+// from all instruction files (global + repo-level) for the given tools.
+// Returns the list of files that were modified.
+func RevertInstructionFiles(toolIDs []string) (revertedFiles []string) {
+	home, _ := os.UserHomeDir()
+
+	selected := make(map[string]bool)
+	for _, id := range toolIDs {
+		selected[id] = true
+	}
+
+	inRepo := IsInGitRepo()
+	var repoRoot string
+	if inRepo {
+		repoRoot, _ = GitRepoRoot()
+	}
+
+	for _, cfg := range instructionConfigs {
+		if !selected[cfg.toolID] {
+			continue
+		}
+
+		// ── Global paths ──
+		for _, p := range cfg.globalPaths {
+			fullPath := filepath.Join(home, p)
+			if revertInstructionFromFile(fullPath, cfg) {
+				revertedFiles = append(revertedFiles, fullPath)
+			}
+		}
+
+		// ── Repo paths ──
+		if inRepo && repoRoot != "" {
+			for _, p := range cfg.repoPaths {
+				fullPath := filepath.Join(repoRoot, p)
+				if revertInstructionFromFile(fullPath, cfg) {
+					revertedFiles = append(revertedFiles, fullPath)
+				}
+			}
+		}
+	}
+
+	return revertedFiles
+}
+
 // HookDir returns the global git hooks directory path.
 func HookDir() (string, error) {
 	home, err := os.UserHomeDir()

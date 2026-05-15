@@ -76,7 +76,8 @@ Commands:
   configure --hook-only  Install hook only, skip instruction files
   status              Show current configuration status
   record              Query AI tool usage records and statistics
-  uninstall           Remove all configuration (hook + instruction files)
+  uninstall           Remove hook only (keep instruction files)
+  uninstall --full    Remove hook + revert all instruction files
 
 Examples:
   ai-trailer detect                    # What AI tools are installed?
@@ -549,6 +550,13 @@ func cmdRecordCommit(args []string) {
 // ── uninstall command ───────────────────────────────────────────────
 
 func cmdUninstall(args []string) {
+	fullFlag := false
+	for _, a := range args {
+		if a == "--full" || a == "-f" {
+			fullFlag = true
+		}
+	}
+
 	fmt.Println("\n🗑  Uninstalling AI Trailer configuration...")
 	fmt.Println(strings.Repeat("─", 55))
 
@@ -559,11 +567,28 @@ func cmdUninstall(args []string) {
 		fmt.Println("  ✓ Git config unset")
 	}
 
-	// Report on CLAUDE.md changes (we don't auto-revert those)
-	home, _ := os.UserHomeDir()
-	claudeMD := home + "/.claude/CLAUDE.md"
-	if _, err := os.Stat(claudeMD); err == nil {
-		fmt.Printf("  ℹ  CLAUDE.md at %s was NOT modified (manual revert if needed)\n", claudeMD)
+	// ── Full uninstall: also revert instruction files ──
+	if fullFlag {
+		fmt.Println("\n📄 Reverting instruction files...")
+		results := detect.DetectAll()
+		var allIDs []string
+		for _, r := range results {
+			allIDs = append(allIDs, r.Tool.ID)
+		}
+		reverted := config.RevertInstructionFiles(allIDs)
+		if len(reverted) > 0 {
+			for _, f := range reverted {
+				fmt.Printf("  ✓ Reverted %s\n", f)
+			}
+		}
+	} else {
+		home, _ := os.UserHomeDir()
+		claudeMD := home + "/.claude/CLAUDE.md"
+		if _, err := os.Stat(claudeMD); err == nil {
+			fmt.Printf("  ℹ  %s was NOT modified (use --full to revert all instruction files)\n", claudeMD)
+		} else {
+			fmt.Println("  ℹ  Instruction files unchanged. Use --full to revert them.")
+		}
 	}
 
 	rec, _ := record.New()
@@ -573,7 +598,7 @@ func cmdUninstall(args []string) {
 	})
 
 	// Send uninstall event to webhook
-	hookWasInstalled := true // we just removed it
+	hookWasInstalled := true
 	if w := webhook.DefaultClient(); w.URL != "" {
 		var detected []string
 		for _, r := range detect.DetectAll() {
@@ -581,7 +606,16 @@ func cmdUninstall(args []string) {
 				detected = append(detected, r.Tool.ID)
 			}
 		}
-		go w.SendUninstall(detected, nil, hookWasInstalled)
+		extra := ""
+		if fullFlag {
+			extra = "Full uninstall: instruction files reverted"
+		}
+		go w.Send(webhook.Payload{
+			Event:         "uninstall",
+			ToolsDetected: strings.Join(detected, ", "),
+			HookInstalled: hookWasInstalled,
+			Extra:         extra,
+		})
 	}
 
 	fmt.Println(strings.Repeat("─", 55))
