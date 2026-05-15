@@ -164,20 +164,37 @@ if ! grep -qi "Ai-os:" "$COMMIT_MSG_FILE" 2>/dev/null; then
 fi
 
 # ── Detect model ────────────────────────────────────────────────────
+
+# read_model_override checks ~/.ai-trailer/models for a manual override.
+# Format: one tool_id=model per line. Highest priority.
+read_model_override() {
+    local override_file="$HOME/.ai-trailer/models"
+    if [ -f "$override_file" ]; then
+        grep "^${TOOL}=" "$override_file" 2>/dev/null | head -1 | cut -d= -f2-
+    fi
+}
+
 detect_model() {
+    # 1. Manual override (highest priority)
+    MODEL=$(read_model_override)
+    [ -n "$MODEL" ] && { echo "$MODEL"; return 0; }
+
+    # 2. Auto-detect from tool-specific config files
     case "$TOOL" in
         claude-code|kilocode)
-            # ~/.claude/settings.json → model field
             MODEL=$(grep -oP '"model"\s*:\s*"\K[^"]+' "$HOME/.claude/settings.json" 2>/dev/null || true)
-            # Also check project-level settings
             [ -z "$MODEL" ] && MODEL=$(grep -oP '"model"\s*:\s*"\K[^"]+' .claude/settings.json 2>/dev/null || true)
             ;;
         hermes)
-            # ~/.hermes/config.yaml → model.default
             MODEL=$(grep -oP '^\s*default:\s*\K\S+' "$HOME/.hermes/config.yaml" 2>/dev/null || true)
             ;;
         codex)
+            # Codex CLI config — try multiple locations
             MODEL=$(grep -oP '"model"\s*:\s*"\K[^"]+' "$HOME/.codex/config.json" 2>/dev/null || true)
+            [ -z "$MODEL" ] && MODEL=$(grep -oP '"model"\s*:\s*"\K[^"]+' "$HOME/.config/codex/config.json" 2>/dev/null || true)
+            [ -z "$MODEL" ] && MODEL=$(grep -oP '"model"\s*:\s*"\K[^"]+' "$HOME/.codex/settings.json" 2>/dev/null || true)
+            # Also try env var
+            [ -z "$MODEL" ] && MODEL="${CODEX_MODEL:-}"
             ;;
         opencode)
             MODEL=$(grep -oP '"model"\s*:\s*"\K[^"]+' "$HOME/.opencode/config.json" 2>/dev/null || true)
@@ -188,20 +205,27 @@ detect_model() {
             [ -z "$MODEL" ] && MODEL=$(grep -oP '"model"\s*:\s*"\K[^"]+' "$HOME/.config/gemini/settings.json" 2>/dev/null || true)
             ;;
         github-copilot|copilot)
-            # Copilot stores model in VS Code / Cursor settings.json
-            for settings in \
-                "$HOME/Library/Application Support/Code/User/settings.json" \
-                "$HOME/Library/Application Support/Cursor/User/settings.json" \
-                "$HOME/.vscode-server/data/Machine/settings.json" \
-                "$HOME/.config/Code/User/settings.json" \
-                "$HOME/.config/Cursor/User/settings.json" \
-                "$HOME/AppData/Roaming/Code/User/settings.json"
-            do
-                if [ -f "$settings" ]; then
-                    MODEL=$(grep -oP '"github\.copilot\.(chat|selectedCompletion|advanced)\.?\w*[Mm]odel"\s*:\s*"\K[^"]+' "$settings" 2>/dev/null | head -1 || true)
-                    [ -n "$MODEL" ] && break
-                fi
-            done
+            # 2a. Copilot CLI — check gh config
+            MODEL=$(grep -oP 'model:\s*\K\S+' "$HOME/.config/gh/config.yml" 2>/dev/null || true)
+            # 2b. Copilot env vars
+            [ -z "$MODEL" ] && MODEL="${COPILOT_MODEL:-}"
+            [ -z "$MODEL" ] && MODEL="${GITHUB_COPILOT_MODEL:-}"
+            # 2c. VS Code / Cursor settings (for users who also have the extension)
+            if [ -z "$MODEL" ]; then
+                for settings in \
+                    "$HOME/Library/Application Support/Code/User/settings.json" \
+                    "$HOME/Library/Application Support/Cursor/User/settings.json" \
+                    "$HOME/.vscode-server/data/Machine/settings.json" \
+                    "$HOME/.config/Code/User/settings.json" \
+                    "$HOME/.config/Cursor/User/settings.json" \
+                    "$HOME/AppData/Roaming/Code/User/settings.json"
+                do
+                    if [ -f "$settings" ]; then
+                        MODEL=$(grep -oP '"github\.copilot\.(chat|selectedCompletion|advanced)\.?\w*[Mm]odel"\s*:\s*"\K[^"]+' "$settings" 2>/dev/null | head -1 || true)
+                        [ -n "$MODEL" ] && break
+                    fi
+                done
+            fi
             ;;
         aider)
             MODEL=$(grep -oP '^\s*model:\s*\K\S+' .aider.conf.yml 2>/dev/null || true)

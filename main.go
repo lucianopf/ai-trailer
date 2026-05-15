@@ -88,6 +88,7 @@ Commands:
   configure           Interactive configuration wizard (hook only)
   configure --all     Hook only, all detected tools (non-interactive)
   configure --tool X  Hook only, specific tool
+  configure --model M --tool X  Set model override for tool
   configure --instructions  Also inject into CLAUDE.md, AGENTS.md, etc.
   status              Show current configuration status
   record              Query AI tool usage records and statistics
@@ -170,6 +171,7 @@ func cmdConfigure(args []string) {
 	toolFlag := getArg("--tool")
 	skipHook := hasFlag("--no-hook")
 	injectInstructions := hasFlag("--instructions") || hasFlag("-i")
+	modelFlag := getArg("--model")
 
 	results := detect.DetectAll()
 
@@ -338,6 +340,35 @@ func cmdConfigure(args []string) {
 	}
 	for _, r := range selected {
 		configuredNames = append(configuredNames, r.Tool.ID)
+	}
+
+	// ── Save model override if --model provided with --tool ──
+	if modelFlag != "" && len(selected) > 0 {
+		modelFile := os.Getenv("HOME") + "/.ai-trailer/models"
+		os.MkdirAll(os.Getenv("HOME")+"/.ai-trailer", 0755)
+		// Read existing overrides
+		existing, _ := os.ReadFile(modelFile)
+		lines := strings.Split(string(existing), "\n")
+		// Build new content: replace or append
+		var newLines []string
+		found := false
+		for _, line := range lines {
+			line = strings.TrimSpace(line)
+			if line == "" {
+				continue
+			}
+			if strings.HasPrefix(line, selected[0].Tool.ID+"=") {
+				newLines = append(newLines, selected[0].Tool.ID+"="+modelFlag)
+				found = true
+			} else if line != "" {
+				newLines = append(newLines, line)
+			}
+		}
+		if !found {
+			newLines = append(newLines, selected[0].Tool.ID+"="+modelFlag)
+		}
+		os.WriteFile(modelFile, []byte(strings.Join(newLines, "\n")+"\n"), 0644)
+		fmt.Printf("  ✓ Model override saved: %s=%s → %s\n", selected[0].Tool.ID, modelFlag, modelFile)
 	}
 
 	fmt.Println()
