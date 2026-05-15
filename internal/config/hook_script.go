@@ -166,7 +166,7 @@ fi
 # ── Detect model ────────────────────────────────────────────────────
 detect_model() {
     case "$TOOL" in
-        claude-code)
+        claude-code|kilocode)
             # ~/.claude/settings.json → model field
             MODEL=$(grep -oP '"model"\s*:\s*"\K[^"]+' "$HOME/.claude/settings.json" 2>/dev/null || true)
             # Also check project-level settings
@@ -179,14 +179,53 @@ detect_model() {
         codex)
             MODEL=$(grep -oP '"model"\s*:\s*"\K[^"]+' "$HOME/.codex/config.json" 2>/dev/null || true)
             ;;
-        opencode|kilocode|gemini-cli|copilot|aider|cody|continue|windsurf|amazon-q|tabnine|coderabbit)
-            # Try reading model from tool config
-            MODEL=""
+        opencode)
+            MODEL=$(grep -oP '"model"\s*:\s*"\K[^"]+' "$HOME/.opencode/config.json" 2>/dev/null || true)
+            [ -z "$MODEL" ] && MODEL=$(grep -oP '"model"\s*:\s*"\K[^"]+' .opencode/config.json 2>/dev/null || true)
+            ;;
+        gemini-cli)
+            MODEL=$(grep -oP '"model"\s*:\s*"\K[^"]+' "$HOME/.gemini/settings.json" 2>/dev/null || true)
+            [ -z "$MODEL" ] && MODEL=$(grep -oP '"model"\s*:\s*"\K[^"]+' "$HOME/.config/gemini/settings.json" 2>/dev/null || true)
+            ;;
+        github-copilot|copilot)
+            # Copilot stores model in VS Code / Cursor settings.json
+            for settings in \
+                "$HOME/Library/Application Support/Code/User/settings.json" \
+                "$HOME/Library/Application Support/Cursor/User/settings.json" \
+                "$HOME/.vscode-server/data/Machine/settings.json" \
+                "$HOME/.config/Code/User/settings.json" \
+                "$HOME/.config/Cursor/User/settings.json" \
+                "$HOME/AppData/Roaming/Code/User/settings.json"
+            do
+                if [ -f "$settings" ]; then
+                    MODEL=$(grep -oP '"github\.copilot\.(chat|selectedCompletion|advanced)\.?\w*[Mm]odel"\s*:\s*"\K[^"]+' "$settings" 2>/dev/null | head -1 || true)
+                    [ -n "$MODEL" ] && break
+                fi
+            done
+            ;;
+        aider)
+            MODEL=$(grep -oP '^\s*model:\s*\K\S+' .aider.conf.yml 2>/dev/null || true)
+            [ -z "$MODEL" ] && MODEL=$(grep -oP '^\s*model:\s*\K\S+' "$HOME/.aider.conf.yml" 2>/dev/null || true)
+            ;;
+        cody)
+            MODEL=$(grep -oP '"model"\s*:\s*"\K[^"]+' "$HOME/.cody/config.json" 2>/dev/null || true)
+            ;;
+        windsurf)
+            MODEL=$(grep -oP '"model"\s*:\s*"\K[^"]+' "$HOME/.windsurf/settings.json" 2>/dev/null || true)
+            [ -z "$MODEL" ] && MODEL=$(grep -oP '"model"\s*:\s*"\K[^"]+' "$HOME/.codeium/config.json" 2>/dev/null || true)
             ;;
         cursor)
             MODEL="Sonnet (default)"
             ;;
-        *) MODEL="" ;;
+        continue)
+            MODEL=$(grep -oP '"model"\s*:\s*"\K[^"]+' "$HOME/.continue/config.json" 2>/dev/null || true)
+            ;;
+        amazon-q)
+            MODEL=$(grep -oP '"model"\s*:\s*"\K[^"]+' "$HOME/.aws/q/config.json" 2>/dev/null || true)
+            ;;
+        *)
+            MODEL=""
+            ;;
     esac
     [ -z "$MODEL" ] && MODEL="unknown"
     echo "$MODEL"
