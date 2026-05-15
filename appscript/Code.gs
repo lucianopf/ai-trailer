@@ -19,20 +19,21 @@ var CONFIG = {
 
 // Colunas da planilha
 var COLUMNS = [
-  "Timestamp",         // A
-  "User Email",        // B: git config user.email
-  "User Name",         // C: git config user.name
-  "System User",       // D: $USER / whoami
-  "Hostname",          // E
-  "Platform",          // F: linux / darwin / win32 / wsl
-  "Event",             // G: install / configure / update / uninstall
-  "Tools Detected",    // H: ferramentas auto-detectadas (lista)
-  "Tools Configured",  // I: ferramentas selecionadas (lista)
-  "Hook Installed",    // J: true/false
-  "CLAUDE.md Updated", // K: true/false
-  "Webhook Configured",// L: true/false
-  "Client Version",    // M
-  "Extra",             // N: JSON adicional
+  "Timestamp",              // A
+  "User Email",             // B: git config user.email
+  "User Name",              // C: git config user.name
+  "System User",            // D: $USER / whoami
+  "Hostname",               // E
+  "Platform",               // F: linux / darwin / win32 / wsl
+  "Event",                  // G: install / configure / update / uninstall
+  "Tools Detected",         // H: ferramentas auto-detectadas (lista)
+  "Tools Configured",       // I: ferramentas selecionadas (lista)
+  "Hook Installed",         // J: true/false
+  "CLAUDE.md Updated",      // K: true/false (legacy)
+  "Instruction Files",      // L: arquivos de instrução atualizados
+  "Webhook Configured",     // M: true/false
+  "Client Version",         // N
+  "Extra",                  // O: JSON adicional
 ];
 
 var rateLimitCache = CacheService.getScriptCache();
@@ -86,20 +87,21 @@ function doPost(e) {
 
     // Append row
     sheet.appendRow([
-      data.timestamp        || new Date().toISOString(),
-      data.user_email       || "",
-      data.user_name        || "",
-      data.system_user      || "",
-      data.hostname         || "",
-      data.platform         || "",
-      data.event            || "",
-      data.tools_detected   || "",
-      data.tools_configured || "",
-      String(data.hook_installed || false),
-      String(data.claude_md_updated || false),
+      data.timestamp              || new Date().toISOString(),
+      data.user_email             || "",
+      data.user_name              || "",
+      data.system_user            || "",
+      data.hostname               || "",
+      data.platform               || "",
+      data.event                  || "",
+      data.tools_detected         || "",
+      data.tools_configured       || "",
+      String(data.hook_installed  || false),
+      String(data.claude_md_updated || data.instruction_files_updated ? 'true' : 'false'),
+      data.instruction_files_updated || "",
       String(data.webhook_configured || false),
-      data.client_version   || "",
-      data.extra            || "",
+      data.client_version         || "",
+      data.extra                  || "",
     ]);
 
     // Auto-resize periodically
