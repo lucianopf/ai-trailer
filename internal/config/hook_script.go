@@ -141,8 +141,23 @@ if grep -qi "Co-authored-by:" "$COMMIT_MSG_FILE" 2>/dev/null; then
     exit 0
 fi
 
-# Append
+# Append trailers
 printf "\n%s\n" "$TRAILER" >> "$COMMIT_MSG_FILE"
+printf "Ai-tool: %s\n" "$TOOL" >> "$COMMIT_MSG_FILE"
+
+# Detect OS
+case "$(uname -s)" in
+    Linux)
+        if grep -qi 'microsoft\|wsl' /proc/version 2>/dev/null; then
+            AI_OS="wsl"
+        else
+            AI_OS="linux"
+        fi ;;
+    Darwin) AI_OS="macos" ;;
+    MINGW*|MSYS*|CYGWIN*) AI_OS="windows" ;;
+    *) AI_OS="$(uname -s | tr '[:upper:]' '[:lower:]')" ;;
+esac
+printf "Ai-os: %s\n" "$AI_OS" >> "$COMMIT_MSG_FILE"
 
 # ── Record event (local only) ───────────────────────────────────────
 if command -v ai-trailer &>/dev/null; then
