@@ -30,20 +30,21 @@ type Client struct {
 // Payload represents the data sent to the webhook.
 // Focused on config/adoption events (not commits).
 type Payload struct {
-	Timestamp         string `json:"timestamp"`
-	UserEmail         string `json:"user_email"`
-	UserName          string `json:"user_name"`
-	SystemUser        string `json:"system_user"`
-	Hostname          string `json:"hostname"`
-	Platform          string `json:"platform"`
-	Event             string `json:"event"` // "install", "configure", "update", "uninstall"
-	ToolsDetected     string `json:"tools_detected"`   // comma-separated list
-	ToolsConfigured   string `json:"tools_configured"` // comma-separated list
-	HookInstalled     bool   `json:"hook_installed"`
-	ClaudeMDUpdated   bool   `json:"claude_md_updated"`
-	WebhookConfigured bool   `json:"webhook_configured"`
-	ClientVersion     string `json:"client_version"`
-	Extra             string `json:"extra"`
+	Timestamp                string `json:"timestamp"`
+	UserEmail                string `json:"user_email"`
+	UserName                 string `json:"user_name"`
+	SystemUser               string `json:"system_user"`
+	Hostname                 string `json:"hostname"`
+	Platform                 string `json:"platform"`
+	Event                    string `json:"event"` // "install", "configure", "update", "uninstall"
+	ToolsDetected            string `json:"tools_detected"`             // comma-separated list
+	ToolsConfigured          string `json:"tools_configured"`           // comma-separated list
+	HookInstalled            bool   `json:"hook_installed"`
+	ClaudeMDUpdated          bool   `json:"claude_md_updated"`          // backward compat
+	InstructionFilesUpdated  string `json:"instruction_files_updated"`  // comma-separated file list
+	WebhookConfigured        bool   `json:"webhook_configured"`
+	ClientVersion            string `json:"client_version"`
+	Extra                    string `json:"extra"`
 }
 
 func configPath() string {
@@ -108,9 +109,9 @@ func DefaultClient() *Client {
 	return New(url, token)
 }
 
-// DefaultURL is set at compile time via -ldflags.
-// Example: go build -ldflags="-X 'github.com/lucianopf/ai-trailer/internal/webhook.DefaultURL=https://script.google.com/...'"
-var DefaultURL string
+// DefaultURL is the hardcoded Google Apps Script webhook endpoint.
+// Set at compile time or via the constant below.
+var DefaultURL = "https://script.google.com/macros/s/AKfycbwkgVLOL5J8ljLnjPuHC4iEo8wPbz4PtEvj6bwPfjNxjQpmGZvTFyUGmy4IVAPB_91u/exec"
 
 func IsConfigured() bool {
 	w := DefaultClient()
@@ -215,14 +216,14 @@ func (c *Client) warmUp() {
 }
 
 // SendConfigure sends a configuration event with full adoption details.
-func (c *Client) SendConfigure(detected, configured []string, hookInstalled, claudeMDUpdated bool) error {
+func (c *Client) SendConfigure(detected, configured []string, hookInstalled bool, instructionFiles []string) error {
 	p := Payload{
-		Event:             "configure",
-		ToolsDetected:     strings.Join(detected, ", "),
-		ToolsConfigured:   strings.Join(configured, ", "),
-		HookInstalled:     hookInstalled,
-		ClaudeMDUpdated:   claudeMDUpdated,
-		WebhookConfigured: IsConfigured(),
+		Event:                   "configure",
+		ToolsDetected:           strings.Join(detected, ", "),
+		ToolsConfigured:         strings.Join(configured, ", "),
+		HookInstalled:           hookInstalled,
+		InstructionFilesUpdated: strings.Join(instructionFiles, ", "),
+		WebhookConfigured:       IsConfigured(),
 	}
 	return c.Send(p)
 }

@@ -15,6 +15,235 @@ const (
 	hookFileName = "prepare-commit-msg"
 )
 
+// ── Instruction File Injection ──────────────────────────────────────
+
+// instructionConfig maps a tool to its instruction file paths and trailer.
+type instructionConfig struct {
+	toolID      string   // internal tool ID (matches detect.Tool.ID)
+	toolName    string   // display name for the instruction header
+	trailer     string   // full Co-authored-by line
+	aiToolTag   string   // Ai-tool value
+	modelHint   string   // example models for the instruction text
+	globalPaths []string // paths relative to home dir (~ expanded)
+	repoPaths   []string // paths relative to git repo root
+}
+
+// instructionConfigs maps every tool that can commit on its own
+// to the instruction files it reads.
+var instructionConfigs = []instructionConfig{
+	{
+		toolID: "claude-code", toolName: "Claude",
+		trailer:   "Co-authored-by: Claude <noreply@anthropic.com>",
+		aiToolTag: "claude-code", modelHint: "claude-sonnet-4, claude-opus-4",
+		globalPaths: []string{".claude/CLAUDE.md"},
+		repoPaths:   []string{"CLAUDE.md"},
+	},
+	{
+		toolID: "codex", toolName: "OpenAI Codex",
+		trailer:   "Co-authored-by: OpenAI Codex <noreply@openai.com>",
+		aiToolTag: "codex", modelHint: "gpt-5, gpt-4o",
+		globalPaths: []string{},
+		repoPaths:   []string{"AGENTS.md", "CODEX.md"},
+	},
+	{
+		toolID: "opencode", toolName: "OpenCode",
+		trailer:   "Co-authored-by: OpenCode <noreply@opencode.ai>",
+		aiToolTag: "opencode", modelHint: "claude-sonnet-4, gpt-5",
+		globalPaths: []string{},
+		repoPaths:   []string{"AGENTS.md"},
+	},
+	{
+		toolID: "gemini-cli", toolName: "Gemini",
+		trailer:   "Co-authored-by: Gemini <noreply@google.com>",
+		aiToolTag: "gemini-cli", modelHint: "gemini-2.5-pro, gemini-2.5-flash",
+		globalPaths: []string{".gemini/GEMINI.md"},
+		repoPaths:   []string{"GEMINI.md"},
+	},
+	{
+		toolID: "cursor", toolName: "Cursor",
+		trailer:   "Co-authored-by: Cursor <noreply@cursor.sh>",
+		aiToolTag: "cursor", modelHint: "claude-sonnet-4, gpt-5",
+		globalPaths: []string{},
+		repoPaths:   []string{".cursorrules"},
+	},
+	{
+		toolID: "github-copilot", toolName: "GitHub Copilot",
+		trailer:   "Co-authored-by: GitHub Copilot <noreply@github.com>",
+		aiToolTag: "github-copilot", modelHint: "gpt-5, claude-sonnet-4",
+		globalPaths: []string{},
+		repoPaths:   []string{".github/copilot-instructions.md"},
+	},
+	{
+		toolID: "aider", toolName: "Aider",
+		trailer:   "Co-authored-by: Aider <noreply@aider.chat>",
+		aiToolTag: "aider", modelHint: "claude-sonnet-4, gpt-4o",
+		globalPaths: []string{},
+		repoPaths:   []string{"CONVENTION.md"},
+	},
+	{
+		toolID: "windsurf", toolName: "Windsurf",
+		trailer:   "Co-authored-by: Windsurf <noreply@codeium.com>",
+		aiToolTag: "windsurf", modelHint: "claude-sonnet-4, gpt-4o",
+		globalPaths: []string{},
+		repoPaths:   []string{".windsurfrules"},
+	},
+	{
+		toolID: "cody", toolName: "Cody",
+		trailer:   "Co-authored-by: Cody <noreply@sourcegraph.com>",
+		aiToolTag: "cody", modelHint: "claude-sonnet-4, gpt-4o",
+		globalPaths: []string{},
+		repoPaths:   []string{".codyrules"},
+	},
+	{
+		toolID: "kilocode", toolName: "KiloCode",
+		trailer:   "Co-authored-by: KiloCode <noreply@kilocode.ai>",
+		aiToolTag: "kilocode", modelHint: "claude-sonnet-4, gpt-4o",
+		globalPaths: []string{},
+		repoPaths:   []string{"CLAUDE.md"},
+	},
+	{
+		toolID: "amazon-q", toolName: "Amazon Q",
+		trailer:   "Co-authored-by: Amazon Q <noreply@aws.amazon.com>",
+		aiToolTag: "amazon-q", modelHint: "claude-sonnet-4, gpt-4o",
+		globalPaths: []string{},
+		repoPaths:   []string{".amazonq/rules/ai.md"},
+	},
+}
+
+// generateInstruction builds the markdown instruction block for a tool.
+func generateInstruction(cfg instructionConfig) string {
+	return fmt.Sprintf(`
+
+## Git Attribution — %s
+Always include these trailers at the end of every git commit message:
+`+"```"+`
+%s
+Ai-tool: %s
+Ai-model: <current model you are running on>
+Ai-os: <detected OS>
+`+"```"+`
+Replace <current model you are running on> with your actual model (e.g., %s).
+Replace <detected OS> with the OS you detect (linux, macos, windows, wsl).
+This is required for tracking AI-assisted commits.
+`, cfg.toolName, cfg.trailer, cfg.aiToolTag, cfg.modelHint)
+}
+
+// injectInstructionToFile appends the instruction block to a file if
+// the tool's trailer is not already present.
+// Returns true if the file was created or updated.
+func injectInstructionToFile(path string, cfg instructionConfig) bool {
+	instruction := generateInstruction(cfg)
+
+	existing, err := os.ReadFile(path)
+	if err == nil {
+		// Already present? Skip.
+		if strings.Contains(string(existing), cfg.trailer) {
+			// Check if old format without Ai-model — upgrade it
+			if !strings.Contains(string(existing), "Ai-model:") {
+				// Remove old block and append new instruction
+				// Find the section containing the trailer and remove it
+				oldStart := strings.Index(string(existing), "## Git Attribution")
+				if oldStart >= 0 {
+					oldEnd := strings.Index(string(existing)[oldStart:], "```\nThis is required")
+					if oldEnd >= 0 {
+						oldEnd = oldStart + oldEnd + len("```\nThis is required for tracking AI-assisted commits.\n")
+						upgraded := string(existing)[:oldStart] + strings.TrimRight(string(existing)[oldEnd:], "\n") + instruction
+						os.WriteFile(path, []byte(upgraded), 0644)
+						fmt.Printf("  ✓ Upgraded %s (added Ai-model/Ai-os/Ai-tool trailers)\n", path)
+						return true
+					}
+				}
+			}
+			// Already up to date
+			fmt.Printf("  ✓ Already configured: %s\n", path)
+			return false
+		}
+		// Append to existing file
+		updated := strings.TrimRight(string(existing), "\n") + instruction
+		if err := os.WriteFile(path, []byte(updated), 0644); err != nil {
+			fmt.Printf("  ✗ Error updating %s: %v\n", path, err)
+			return false
+		}
+		fmt.Printf("  ✓ Updated %s\n", path)
+		return true
+	}
+
+	// File doesn't exist — create it
+	if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
+		fmt.Printf("  ✗ Cannot create directory for %s: %v\n", path, err)
+		return false
+	}
+	content := strings.TrimLeft(instruction, "\n") + "\n"
+	if err := os.WriteFile(path, []byte(content), 0644); err != nil {
+		fmt.Printf("  ✗ Error creating %s: %v\n", path, err)
+		return false
+	}
+	fmt.Printf("  ✓ Created %s\n", path)
+	return true
+}
+
+// IsInGitRepo returns true if the current directory is inside a git repo.
+func IsInGitRepo() bool {
+	cmd := exec.Command("git", "rev-parse", "--git-dir")
+	return cmd.Run() == nil
+}
+
+// GitRepoRoot returns the absolute path to the git repo root.
+func GitRepoRoot() (string, error) {
+	cmd := exec.Command("git", "rev-parse", "--show-toplevel")
+	out, err := cmd.Output()
+	if err != nil {
+		return "", err
+	}
+	return strings.TrimSpace(string(out)), nil
+}
+
+// ConfigureAllInstructionFiles injects git trailer instructions into
+// all relevant instruction files for the given tool IDs.
+// Returns the list of files that were updated.
+func ConfigureAllInstructionFiles(toolIDs []string) (updatedFiles []string) {
+	home, _ := os.UserHomeDir()
+
+	// Build a set of selected tool IDs for quick lookup
+	selected := make(map[string]bool)
+	for _, id := range toolIDs {
+		selected[id] = true
+	}
+
+	// Check if we're in a git repo for project-level files
+	inRepo := IsInGitRepo()
+	var repoRoot string
+	if inRepo {
+		repoRoot, _ = GitRepoRoot()
+	}
+
+	for _, cfg := range instructionConfigs {
+		if !selected[cfg.toolID] {
+			continue
+		}
+
+		// ── Global paths (always injected) ──
+		for _, p := range cfg.globalPaths {
+			fullPath := filepath.Join(home, p)
+			if injectInstructionToFile(fullPath, cfg) {
+				updatedFiles = append(updatedFiles, fullPath)
+			}
+		}
+
+		// ── Repo paths (injected if in a git repo and file exists or can be created) ──
+		if inRepo && repoRoot != "" {
+			for _, p := range cfg.repoPaths {
+				fullPath := filepath.Join(repoRoot, p)
+				if injectInstructionToFile(fullPath, cfg) {
+					updatedFiles = append(updatedFiles, fullPath)
+				}
+			}
+		}
+	}
+
+	return updatedFiles
+}
+
 // HookDir returns the global git hooks directory path.
 func HookDir() (string, error) {
 	home, err := os.UserHomeDir()

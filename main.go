@@ -75,7 +75,7 @@ Commands:
   configure --tool X  Configure specific tool (claude-code, hermes, codex, ...)
   status              Show current configuration status
   record              Query AI tool usage records and statistics
-  uninstall           Remove all configuration (hook + CLAUDE.md changes)
+  uninstall           Remove all configuration (hook + instruction files)
 
 Examples:
   ai-trailer detect                    # What AI tools are installed?
@@ -242,22 +242,31 @@ func cmdConfigure(args []string) {
 	// Configure each selected tool
 	fmt.Println("\n⚙  Applying configuration...")
 	fmt.Println(strings.Repeat("─", 55))
+
+	// Collect selected tool IDs for instruction file injection
+	var selectedIDs []string
+	for _, r := range selected {
+		selectedIDs = append(selectedIDs, r.Tool.ID)
+	}
+
+	// ── Inject into ALL instruction files (global + project) ──
+	fmt.Println("\n📄 Updating instruction files...")
+	updatedFiles := config.ConfigureAllInstructionFiles(selectedIDs)
+	if len(updatedFiles) > 0 {
+		for _, f := range updatedFiles {
+			rec.LogConfigure("instructions", f, "Injected git trailer instruction")
+		}
+	}
+	if !config.IsInGitRepo() {
+		fmt.Println("  ℹ  Not in a git repo — project-level files skipped.")
+		fmt.Println("     Run 'ai-trailer configure' inside a repo to update them.")
+	}
+
 	for _, r := range selected {
 		fmt.Printf("\n📝 %s:\n", r.Tool.Name)
 
 		if r.Tool.NativeTrailer {
-			if r.Tool.ID == "claude-code" {
-				fmt.Println("  Claude Code adds trailers natively via system prompt.")
-				if allFlag || askYesNo("  Add reinforcement instruction to CLAUDE.md?") {
-					if err := config.ConfigureClaudeMD(true); err != nil {
-						fmt.Printf("  ✗ Error: %v\n", err)
-					} else {
-						rec.LogConfigure(r.Tool.ID, r.Tool.Name, "Updated CLAUDE.md with trailer instruction")
-					}
-				} else {
-					fmt.Println("  ℹ  Skipped (native trailer support is sufficient)")
-				}
-			}
+			fmt.Println("  ✓ Native trailer support — instruction file updated above.")
 		} else {
 			anyNeedsHook = true
 			fmt.Printf("  Added to hook configuration (trailer: %s)\n", r.Tool.Trailer)
@@ -307,14 +316,9 @@ func cmdConfigure(args []string) {
 
 	fmt.Println()
 	if w := webhook.DefaultClient(); w.URL != "" {
-		claudeUpdated := false
-		for _, r := range selected {
-			if r.Tool.NativeTrailer && r.Tool.ID == "claude-code" {
-				claudeUpdated = true
-			}
-		}
+		instructionFilesList := updatedFiles
 		fmt.Print("📊 Sending config to Google Sheets... ")
-		if err := w.SendConfigure(detectedNames, configuredNames, hookInstalled, claudeUpdated); err != nil {
+		if err := w.SendConfigure(detectedNames, configuredNames, hookInstalled, instructionFilesList); err != nil {
 			fmt.Printf("⚠  (%v)\n", err)
 		} else {
 			fmt.Println("✓")
