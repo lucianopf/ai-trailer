@@ -239,7 +239,19 @@ detect_model() {
             [ -z "$MODEL" ] && MODEL=$(grep -oP '"model"\s*:\s*"\K[^"]+' "$HOME/.codeium/config.json" 2>/dev/null || true)
             ;;
         cursor)
-            MODEL="Sonnet (default)"
+            # Cursor stores model in settings.json (VS Code-compatible)
+            for settings in \
+                "$HOME/Library/Application Support/Cursor/User/settings.json" \
+                "$HOME/.config/Cursor/User/settings.json" \
+                "$HOME/.cursor/settings.json" \
+                "$HOME/AppData/Roaming/Cursor/User/settings.json"
+            do
+                if [ -f "$settings" ]; then
+                    MODEL=$(grep -oP '"cursor\.(chat\.)?[Mm]odel"\s*:\s*"\K[^"]+' "$settings" 2>/dev/null | head -1 || true)
+                    [ -n "$MODEL" ] && break
+                fi
+            done
+            [ -z "$MODEL" ] && MODEL="unknown"
             ;;
         continue)
             MODEL=$(grep -oP '"model"\s*:\s*"\K[^"]+' "$HOME/.continue/config.json" 2>/dev/null || true)
