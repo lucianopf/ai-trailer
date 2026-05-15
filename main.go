@@ -23,7 +23,12 @@ package main
 import (
 	"bufio"
 	"fmt"
+	"io"
+	"net/http"
 	"os"
+	"os/exec"
+	"path/filepath"
+	"runtime"
 	"strings"
 
 	"github.com/lucianopf/ai-trailer/internal/config"
@@ -31,6 +36,12 @@ import (
 	"github.com/lucianopf/ai-trailer/internal/record"
 	"github.com/lucianopf/ai-trailer/internal/webhook"
 )
+
+// Version is set at build time via -ldflags, or defaults to this constant.
+var Version = "v0.3.0"
+
+// RepoURL is the base URL for downloading binaries from the public repo.
+const RepoURL = "https://raw.githubusercontent.com/lucianopf/ai-trailer/master"
 
 func main() {
 	if len(os.Args) < 2 {
@@ -54,6 +65,10 @@ func main() {
 		cmdRecordCommit(args)
 	case "uninstall":
 		cmdUninstall(args)
+	case "version", "-v", "--version":
+		cmdVersion(args)
+	case "update":
+		cmdUpdate(args)
 	case "help", "-h", "--help":
 		printUsage()
 	default:
@@ -78,6 +93,9 @@ Commands:
   record              Query AI tool usage records and statistics
   uninstall           Remove hook only (keep instruction files)
   uninstall --full    Remove hook + revert all instruction files
+  version             Show version
+  update              Download and install latest binary
+  update --reconfigure  Update + re-run configure
 
 Examples:
   ai-trailer detect                    # What AI tools are installed?
@@ -621,4 +639,149 @@ func cmdUninstall(args []string) {
 	fmt.Println(strings.Repeat("─", 55))
 	fmt.Println("✅ Uninstall complete.")
 	fmt.Println("   Record log preserved at ~/.ai-trailer/records.jsonl")
+}
+
+// ── version command ─────────────────────────────────────────────────
+
+func cmdVersion(args []string) {
+	fmt.Printf("ai-trailer %s\n", Version)
+	fmt.Printf("  Platform: %s\n", config.Platform())
+	fmt.Printf("  Repo:     https://github.com/lucianopf/ai-trailer\n")
+}
+
+// ── update command ──────────────────────────────────────────────────
+
+func cmdUpdate(args []string) {
+	reconfigure := false
+	for _, a := range args {
+		if a == "--reconfigure" || a == "-r" {
+			reconfigure = true
+		}
+	}
+
+	fmt.Println("\n🔄 Updating ai-trailer...")
+	fmt.Println(strings.Repeat("─", 55))
+
+	// Determine binary name
+	osName := runtime.GOOS
+	arch := runtime.GOARCH
+	if arch == "amd64" {
+		arch = "amd64" // keep
+	}
+	binaryName := fmt.Sprintf("ai-trailer-%s-%s", osName, arch)
+	if osName == "windows" {
+		binaryName += ".exe"
+	}
+
+	downloadURL := fmt.Sprintf("%s/dist/%s", RepoURL, binaryName)
+	fmt.Printf("  Downloading: %s\n", downloadURL)
+
+	// Download to temp file
+	tmpDir, err := os.MkdirTemp("", "ai-trailer-update")
+	if err != nil {
+		fmt.Printf("  ✗ Cannot create temp dir: %v\n", err)
+		return
+	}
+	defer os.RemoveAll(tmpDir)
+
+	tmpPath := filepath.Join(tmpDir, binaryName)
+	resp, err := http.Get(downloadURL)
+	if err != nil {
+		fmt.Printf("  ✗ Download failed: %v\n", err)
+		return
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != 200 {
+		fmt.Printf("  ✗ Download failed: HTTP %d\n", resp.StatusCode)
+		return
+	}
+
+	f, err := os.Create(tmpPath)
+	if err != nil {
+		fmt.Printf("  ✗ Cannot create temp file: %v\n", err)
+		return
+	}
+
+	written, err := io.Copy(f, resp.Body)
+	f.Close()
+	if err != nil {
+		fmt.Printf("  ✗ Download failed: %v\n", err)
+		return
+	}
+	fmt.Printf("  ✓ Downloaded %d bytes\n", written)
+
+	// macOS: strip quarantine
+	if runtime.GOOS == "darwin" {
+		// Use xattr if available
+		fmt.Println("  Stripping quarantine attribute...")
+		exec.Command("xattr", "-d", "com.apple.quarantine", tmpPath).Run()
+		exec.Command("xattr", "-cr", tmpPath).Run()
+	}
+
+	// Make executable
+	os.Chmod(tmpPath, 0755)
+
+	// Find current binary location
+	currentPath, err := os.Executable()
+	if err != nil {
+		fmt.Printf("  ✗ Cannot find current binary: %v\n", err)
+		return
+	}
+	// Resolve symlinks
+	currentPath, err = filepath.EvalSymlinks(currentPath)
+	if err != nil {
+		fmt.Printf("  ✗ Cannot resolve binary path: %v\n", err)
+		return
+	}
+
+	fmt.Printf("  Current binary: %s\n", currentPath)
+
+	// Replace: rename current to .old, copy new in place
+	backupPath := currentPath + ".old"
+	if err := os.Rename(currentPath, backupPath); err != nil {
+		fmt.Printf("  ✗ Cannot backup current binary: %v\n", err)
+		fmt.Println("  Try running with sudo or check permissions.")
+		return
+	}
+
+	// Copy new binary
+	src, _ := os.Open(tmpPath)
+	dst, err := os.Create(currentPath)
+	if err != nil {
+		// Restore backup
+		os.Rename(backupPath, currentPath)
+		fmt.Printf("  ✗ Cannot write new binary: %v\n", err)
+		return
+	}
+	io.Copy(dst, src)
+	src.Close()
+	dst.Close()
+	os.Chmod(currentPath, 0755)
+
+	// Remove backup (best effort)
+	os.Remove(backupPath)
+
+	fmt.Println("  ✓ Binary updated")
+
+	// Reconfigure if requested
+	if reconfigure {
+		fmt.Println("\n  Re-running configuration...")
+		// Re-run configure --all
+		results := detect.DetectAll()
+		var allIDs []string
+		for _, r := range results {
+			if r.Found {
+				allIDs = append(allIDs, r.Tool.ID)
+			}
+		}
+		config.ConfigureAllInstructionFiles(allIDs)
+		config.InstallHook()
+	}
+
+	fmt.Println(strings.Repeat("─", 55))
+	fmt.Println("✅ Update complete. New version:", Version)
+	if !reconfigure {
+		fmt.Println("   Run 'ai-trailer configure' to refresh hooks/files if needed.")
+	}
 }
