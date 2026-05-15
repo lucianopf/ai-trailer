@@ -11,8 +11,6 @@
 set -euo pipefail
 
 REPO="lucianopf/ai-trailer"
-BRANCH="master"
-RAW_BASE="https://raw.githubusercontent.com/${REPO}/${BRANCH}"
 INSTALL_DIR="${HOME}/.local/bin"
 
 # ── Colors ───────────────────────────────────────────────────────────
@@ -51,50 +49,67 @@ main() {
     echo ""
 
     PLATFORM=$(detect_platform)
-    BINARY_NAME="ai-trailer-${PLATFORM}"
+    BINARY_SRC="ai-trailer-${PLATFORM}"
 
     # Windows → .exe
     if [[ "$PLATFORM" == windows-* ]]; then
-        BINARY_NAME="${BINARY_NAME}.exe"
+        BINARY_SRC="${BINARY_SRC}.exe"
     fi
 
-    DOWNLOAD_URL="${RAW_BASE}/dist/${BINARY_NAME}"
-
     info "Platform: ${PLATFORM}"
-    info "Downloading: ${DOWNLOAD_URL}"
 
     # Create temp dir
     TMPDIR=$(mktemp -d)
     trap "rm -rf ${TMPDIR}" EXIT
 
-    # Download
-    if command -v curl &>/dev/null; then
-        curl -fsSL "${DOWNLOAD_URL}" -o "${TMPDIR}/${BINARY_NAME}"
-    elif command -v wget &>/dev/null; then
-        wget -q "${DOWNLOAD_URL}" -O "${TMPDIR}/${BINARY_NAME}"
+    # ── Clone repo (shallow) to get pre-built binaries ────────────
+    info "Cloning ai-trailer (shallow)..."
+
+    CLONE_ARGS=(--depth 1 --filter=blob:none --sparse)
+    if git clone "${CLONE_ARGS[@]}" "git@github.com:${REPO}.git" "${TMPDIR}/repo" 2>/dev/null; then
+        ok "Cloned via SSH"
+    elif git clone "${CLONE_ARGS[@]}" "https://github.com/${REPO}.git" "${TMPDIR}/repo" 2>/dev/null; then
+        ok "Cloned via HTTPS"
+    elif command -v gh &>/dev/null && gh auth status &>/dev/null 2>&1; then
+        info "Using gh CLI..."
+        gh repo clone "${REPO}" "${TMPDIR}/repo" -- --depth 1 --filter=blob:none --sparse
+        ok "Cloned via gh CLI"
     else
-        err "Neither curl nor wget found. Install one and retry."
+        err ""
+        err "  Cannot clone the repo. Make sure you have access to ${REPO}."
+        err ""
+        err "  Try one of these first:"
+        err "    • gh auth login"
+        err "    • ssh-add ~/.ssh/id_ed25519  (or your SSH key)"
+        err "    • git clone git@github.com:${REPO}.git"
+        err ""
+        err "  Then run this installer again."
         exit 1
     fi
 
-    # Verify download
-    if [[ ! -s "${TMPDIR}/${BINARY_NAME}" ]]; then
-        err "Download failed or empty file."
-        err "URL: ${DOWNLOAD_URL}"
+    cd "${TMPDIR}/repo"
+    git sparse-checkout set dist 2>/dev/null || true
+
+    # Find the binary
+    BINARY_PATH="${TMPDIR}/repo/dist/${BINARY_SRC}"
+    if [[ ! -f "${BINARY_PATH}" ]]; then
+        err "Binary not found: dist/${BINARY_SRC}"
+        err "Available binaries:"
+        ls -1 "${TMPDIR}/repo/dist/" 2>/dev/null || echo "  (none)"
         exit 1
     fi
+    ok "Found: dist/${BINARY_SRC}"
 
     # ── macOS: strip quarantine ──────────────────────────────────
     if [[ "$(uname -s)" == "Darwin" ]]; then
         info "macOS detected — stripping quarantine attribute..."
-        xattr -d com.apple.quarantine "${TMPDIR}/${BINARY_NAME}" 2>/dev/null || true
-        # Also try the recursive flag (belt and suspenders)
-        xattr -cr "${TMPDIR}/${BINARY_NAME}" 2>/dev/null || true
+        xattr -d com.apple.quarantine "${BINARY_PATH}" 2>/dev/null || true
+        xattr -cr "${BINARY_PATH}" 2>/dev/null || true
         ok "Quarantine removed — no more Gatekeeper prompt!"
     fi
 
     # Make executable
-    chmod +x "${TMPDIR}/${BINARY_NAME}"
+    chmod +x "${BINARY_PATH}"
 
     # Install
     mkdir -p "${INSTALL_DIR}"
@@ -103,7 +118,7 @@ main() {
         FINAL_NAME="ai-trailer.exe"
     fi
 
-    mv "${TMPDIR}/${BINARY_NAME}" "${INSTALL_DIR}/${FINAL_NAME}"
+    cp "${BINARY_PATH}" "${INSTALL_DIR}/${FINAL_NAME}"
     ok "Installed to ${INSTALL_DIR}/${FINAL_NAME}"
 
     # Check if install dir is in PATH
