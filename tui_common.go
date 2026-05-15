@@ -20,6 +20,7 @@ type menuItem struct {
 
 // showTextMenu is the plain-text fallback used when:
 // - Running under fish shell (ANSI escapes break)
+// - Running under oh-my-zsh (themes conflict with raw mode)
 // - Non-Linux platforms
 // - Terminal doesn't support raw mode
 func showTextMenu(items []menuItem) []menuItem {
@@ -82,4 +83,29 @@ func showTextMenu(items []menuItem) []menuItem {
 	}
 
 	return items
+}
+
+// isBrokenShell returns true for shells that break raw ANSI TUI:
+// fish, oh-my-zsh, or dumb terminals.
+func isBrokenShell() bool {
+	shell := os.Getenv("SHELL")
+	term := os.Getenv("TERM")
+
+	if strings.Contains(term, "dumb") {
+		return true
+	}
+	if strings.Contains(shell, "fish") {
+		return true
+	}
+	// oh-my-zsh detection: $ZSH env var or ~/.oh-my-zsh directory
+	if os.Getenv("ZSH") != "" || os.Getenv("ZSH_THEME") != "" {
+		return true
+	}
+	home, _ := os.UserHomeDir()
+	if home != "" {
+		if _, err := os.Stat(home + "/.oh-my-zsh"); err == nil {
+			return true
+		}
+	}
+	return false
 }

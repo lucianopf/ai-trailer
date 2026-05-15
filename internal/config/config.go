@@ -43,7 +43,7 @@ var instructionConfigs = []instructionConfig{
 		trailer:   "Co-authored-by: OpenAI Codex <noreply@openai.com>",
 		aiToolTag: "codex", modelHint: "gpt-5, gpt-4o",
 		globalPaths: []string{},
-		repoPaths:   []string{"AGENTS.md", "CODEX.md"},
+		repoPaths:   []string{"AGENTS.md"},
 	},
 	{
 		toolID: "opencode", toolName: "OpenCode",

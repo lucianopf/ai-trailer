@@ -61,8 +61,8 @@ func isTerminal(fd int) bool {
 }
 
 func showInteractiveMenu(items []menuItem) []menuItem {
-	// Fish shell breaks ANSI escape codes — use plain-text fallback
-	if strings.Contains(os.Getenv("SHELL"), "fish") || strings.Contains(os.Getenv("TERM"), "dumb") {
+	// Fish shell and oh-my-zsh break ANSI escape codes — use plain-text fallback
+	if isBrokenShell() {
 		return showTextMenu(items)
 	}
 

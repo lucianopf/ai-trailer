@@ -73,6 +73,7 @@ Commands:
   configure           Interactive configuration wizard
   configure --all     Configure all detected tools (non-interactive)
   configure --tool X  Configure specific tool (claude-code, hermes, codex, ...)
+  configure --hook-only  Install hook only, skip instruction files
   status              Show current configuration status
   record              Query AI tool usage records and statistics
   uninstall           Remove all configuration (hook + instruction files)
@@ -149,6 +150,7 @@ func cmdConfigure(args []string) {
 	allFlag := hasFlag("--all") || hasFlag("-a")
 	toolFlag := getArg("--tool")
 	skipHook := hasFlag("--no-hook")
+	hookOnly := hasFlag("--hook-only")
 
 	results := detect.DetectAll()
 
@@ -250,16 +252,22 @@ func cmdConfigure(args []string) {
 	}
 
 	// ── Inject into ALL instruction files (global + project) ──
-	fmt.Println("\n📄 Updating instruction files...")
-	updatedFiles := config.ConfigureAllInstructionFiles(selectedIDs)
-	if len(updatedFiles) > 0 {
-		for _, f := range updatedFiles {
-			rec.LogConfigure("instructions", f, "Injected git trailer instruction")
+	// Skip if --hook-only: user wants only the git hook, no file changes
+	var updatedFiles []string
+	if !hookOnly {
+		fmt.Println("\n📄 Updating instruction files...")
+		updatedFiles = config.ConfigureAllInstructionFiles(selectedIDs)
+		if len(updatedFiles) > 0 {
+			for _, f := range updatedFiles {
+				rec.LogConfigure("instructions", f, "Injected git trailer instruction")
+			}
 		}
-	}
-	if !config.IsInGitRepo() {
-		fmt.Println("  ℹ  Not in a git repo — project-level files skipped.")
-		fmt.Println("     Run 'ai-trailer configure' inside a repo to update them.")
+		if !config.IsInGitRepo() {
+			fmt.Println("  ℹ  Not in a git repo — project-level files skipped.")
+			fmt.Println("     Run 'ai-trailer configure' inside a repo to update them.")
+		}
+	} else {
+		fmt.Println("\n  ℹ  Skipping instruction files (--hook-only).")
 	}
 
 	for _, r := range selected {
