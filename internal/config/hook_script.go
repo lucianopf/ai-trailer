@@ -21,113 +21,87 @@ case "$COMMIT_SOURCE" in merge|squash) exit 0 ;; esac
 
 # ── Detection ────────────────────────────────────────────────────────
 
-detect_tool() {
-    # Strategy 1: Check environment variables (most reliable)
-    # Claude Code
-    if env | grep -qE '^CLAUDE_CODE_'; then
+tool_from_process_name() {
+    local pname="${1:-}"
+    local pbase="${pname##*/}"
+    case "$pbase" in
+        claude|claude-code)       echo "claude-code";      return 0 ;;
+        codex|codex-cli)          echo "codex";            return 0 ;;
+        hermes)                   echo "hermes";           return 0 ;;
+        opencode)                 echo "opencode";         return 0 ;;
+        kilocode)                 echo "kilocode";         return 0 ;;
+        cursor|Cursor)            echo "cursor";           return 0 ;;
+        copilot|github-copilot|gh-copilot) echo "github-copilot"; return 0 ;;
+        gemini|gemini-cli)        echo "gemini-cli";       return 0 ;;
+        aider|aider-chat)         echo "aider";            return 0 ;;
+        continue)                 echo "continue";         return 0 ;;
+        cody|cody-agent)          echo "cody";             return 0 ;;
+        windsurf|codeium)         echo "windsurf";         return 0 ;;
+        q|amazon-q)               echo "amazon-q";         return 0 ;;
+        tabnine)                  echo "tabnine";          return 0 ;;
+        coderabbit)               echo "coderabbit";       return 0 ;;
+        *)                        return 1 ;;
+    esac
+}
+
+detect_env_tool() {
+    # Use only explicit runtime markers as a fallback. Broad prefixes can be
+    # inherited by other tools and cause false attribution.
+    if env | grep -qE '^(CLAUDE_CODE_SIMPLE|CLAUDE_CODE_USE_BEDROCK|CLAUDE_CODE_USE_VERTEX|CLAUDE_CODE_USE_FOUNDRY)='; then
         echo "claude-code"; return 0
     fi
-    # Hermes Agent
     if env | grep -qE '^(HERMES_|_HERMES_)'; then
         echo "hermes"; return 0
     fi
-    # GitHub Copilot
     if env | grep -qE '^COPILOT_|^GITHUB_COPILOT'; then
         echo "github-copilot"; return 0
     fi
-    # Gemini
-    if env | grep -qE '^(GOOGLE_API_KEY|GEMINI_API_KEY)'; then
-        # Only if running under gemini process (checked in walk below)
-        :
-    fi
-    # Amazon Q
-    if env | grep -qE '^AWS_PROFILE'; then
-        :
-    fi
-    # Cursor
     if env | grep -qE '^CURSOR_'; then
         echo "cursor"; return 0
     fi
-    # Aider
     if env | grep -qE '^AIDER_'; then
         echo "aider"; return 0
     fi
+    return 1
+}
 
-    # Strategy 2: Walk parent process tree (Linux/WSL)
+detect_parent_process_tool() {
+    # Strategy 1: Walk parent process tree (Linux/WSL)
     if [ -f /proc/self/stat ]; then
         local ppid=$(awk '{print $4}' /proc/self/stat)
         for _ in $(seq 1 10); do
             [ "$ppid" -le 1 ] && break
             local pname=""
             [ -f "/proc/$ppid/comm" ] && pname=$(tr -d '\0' < "/proc/$ppid/comm" 2>/dev/null || true)
-            case "$pname" in
-                claude|claude-code)       echo "claude-code";      return 0 ;;
-                codex|codex-cli)          echo "codex";            return 0 ;;
-                hermes)                   echo "hermes";           return 0 ;;
-                opencode)                 echo "opencode";         return 0 ;;
-                kilocode)                 echo "kilocode";         return 0 ;;
-                cursor|Cursor)            echo "cursor";           return 0 ;;
-                copilot|github-copilot|gh-copilot) echo "github-copilot"; return 0 ;;
-                gemini|gemini-cli)        echo "gemini-cli";       return 0 ;;
-                aider|aider-chat)         echo "aider";            return 0 ;;
-                continue)                 echo "continue";         return 0 ;;
-                cody|cody-agent)          echo "cody";             return 0 ;;
-                windsurf|codeium)         echo "windsurf";         return 0 ;;
-                q|amazon-q)               echo "amazon-q";         return 0 ;;
-                tabnine)                  echo "tabnine";          return 0 ;;
-                coderabbit)               echo "coderabbit";       return 0 ;;
-                node|python|python3|bash|sh|zsh|git|dash|tmux) ;; # Keep walking
-                *) ;; # Unknown, keep walking
-            esac
-            # Check env of this process for tools that share env vars
-            if [ -f "/proc/$ppid/environ" ]; then
-                local penv=$(tr '\0' '\n' < "/proc/$ppid/environ" 2>/dev/null || true)
-                if echo "$penv" | grep -qE '^CLAUDE_CODE_';         then echo "claude-code";      return 0; fi
-                if echo "$penv" | grep -qE '^(HERMES_|_HERMES_)';   then echo "hermes";           return 0; fi
-                if echo "$penv" | grep -qE '^COPILOT_';             then echo "github-copilot";   return 0; fi
-                if echo "$penv" | grep -qE '^AIDER_';               then echo "aider";            return 0; fi
-                # Gemini needs process name + API key
-                if echo "$penv" | grep -qE '^GEMINI_API_KEY'; then
-                    case "$pname" in gemini|gemini-cli) echo "gemini-cli"; return 0 ;; esac
-                fi
-                # Amazon Q
-                if echo "$penv" | grep -qE '^AWS_PROFILE'; then
-                    case "$pname" in q|amazon-q) echo "amazon-q"; return 0 ;; esac
-                fi
+            local tool=""
+            if tool=$(tool_from_process_name "$pname"); then
+                echo "$tool"; return 0
             fi
             ppid=$(awk '{print $4}' "/proc/$ppid/stat" 2>/dev/null || echo 1)
         done
     fi
 
-    # Strategy 3: macOS parent process walk
+    # Strategy 2: macOS parent process walk
     if [ "$(uname -s)" = "Darwin" ]; then
         local ppid=$PPID
         for _ in $(seq 1 10); do
             [ "$ppid" -le 1 ] && break
             local pname=$(ps -o comm= -p "$ppid" 2>/dev/null || true)
-            case "$pname" in
-                claude|claude-code)       echo "claude-code";      return 0 ;;
-                codex|codex-cli)          echo "codex";            return 0 ;;
-                hermes)                   echo "hermes";           return 0 ;;
-                opencode)                 echo "opencode";         return 0 ;;
-                kilocode)                 echo "kilocode";         return 0 ;;
-                cursor|Cursor)            echo "cursor";           return 0 ;;
-                copilot|github-copilot)   echo "github-copilot";   return 0 ;;
-                gemini|gemini-cli)        echo "gemini-cli";       return 0 ;;
-                aider|aider-chat)         echo "aider";            return 0 ;;
-                continue)                 echo "continue";         return 0 ;;
-                cody|cody-agent)          echo "cody";             return 0 ;;
-                windsurf|codeium)         echo "windsurf";         return 0 ;;
-                q|amazon-q)               echo "amazon-q";         return 0 ;;
-                tabnine)                  echo "tabnine";          return 0 ;;
-                coderabbit)               echo "coderabbit";       return 0 ;;
-                node|python|python3|bash|sh|zsh|git) ;;
-                *) ;;
-            esac
+            local tool=""
+            if tool=$(tool_from_process_name "$pname"); then
+                echo "$tool"; return 0
+            fi
             ppid=$(ps -o ppid= -p "$ppid" 2>/dev/null | tr -d ' ' || echo 1)
         done
     fi
+    return 1
+}
 
+detect_tool() {
+    # Prefer the actual parent process tree. Env vars are often inherited
+    # across shells and nested tools, so they are only a fallback.
+    detect_parent_process_tool && return 0
+    detect_env_tool && return 0
     return 1
 }
 
