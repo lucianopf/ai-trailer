@@ -197,8 +197,21 @@ detect_model() {
             [ -z "$MODEL" ] && MODEL="${CODEX_MODEL:-}"
             ;;
         opencode)
-            MODEL=$(grep -oP '"model"\s*:\s*"\K[^"]+' "$HOME/.opencode/config.json" 2>/dev/null || true)
-            [ -z "$MODEL" ] && MODEL=$(grep -oP '"model"\s*:\s*"\K[^"]+' .opencode/config.json 2>/dev/null || true)
+            # OpenCode config — try multiple locations and formats
+            for cfg in \
+                "$HOME/.opencode/config.json" \
+                "$HOME/.config/opencode/config.json" \
+                "$HOME/.opencode/settings.json" \
+                "$HOME/.opencode.json" \
+                ".opencode/config.json" \
+                ".opencode.json" \
+                "opencode.json"
+            do
+                [ -f "$cfg" ] && MODEL=$(grep -oP '"model"\s*:\s*"\K[^"]+' "$cfg" 2>/dev/null || true)
+                [ -n "$MODEL" ] && break
+            done
+            # Try env var
+            [ -z "$MODEL" ] && MODEL="${OPENCODE_MODEL:-}"
             ;;
         gemini-cli)
             MODEL=$(grep -oP '"model"\s*:\s*"\K[^"]+' "$HOME/.gemini/settings.json" 2>/dev/null || true)
