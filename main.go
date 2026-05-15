@@ -85,10 +85,10 @@ func printUsage() {
 
 Commands:
   detect              Detect installed AI coding tools
-  configure           Interactive configuration wizard
-  configure --all     Configure all detected tools (non-interactive)
-  configure --tool X  Configure specific tool (claude-code, hermes, codex, ...)
-  configure --hook-only  Install hook only, skip instruction files
+  configure           Interactive configuration wizard (hook only)
+  configure --all     Hook only, all detected tools (non-interactive)
+  configure --tool X  Hook only, specific tool
+  configure --instructions  Also inject into CLAUDE.md, AGENTS.md, etc.
   status              Show current configuration status
   record              Query AI tool usage records and statistics
   uninstall           Remove hook only (keep instruction files)
@@ -169,7 +169,7 @@ func cmdConfigure(args []string) {
 	allFlag := hasFlag("--all") || hasFlag("-a")
 	toolFlag := getArg("--tool")
 	skipHook := hasFlag("--no-hook")
-	hookOnly := hasFlag("--hook-only")
+	injectInstructions := hasFlag("--instructions") || hasFlag("-i")
 
 	results := detect.DetectAll()
 
@@ -270,10 +270,9 @@ func cmdConfigure(args []string) {
 		selectedIDs = append(selectedIDs, r.Tool.ID)
 	}
 
-	// ── Inject into ALL instruction files (global + project) ──
-	// Skip if --hook-only: user wants only the git hook, no file changes
+	// ── Inject into instruction files (opt-in with --instructions) ──
 	var updatedFiles []string
-	if !hookOnly {
+	if injectInstructions {
 		fmt.Println("\n📄 Updating instruction files...")
 		updatedFiles = config.ConfigureAllInstructionFiles(selectedIDs)
 		if len(updatedFiles) > 0 {
@@ -283,10 +282,10 @@ func cmdConfigure(args []string) {
 		}
 		if !config.IsInGitRepo() {
 			fmt.Println("  ℹ  Not in a git repo — project-level files skipped.")
-			fmt.Println("     Run 'ai-trailer configure' inside a repo to update them.")
+			fmt.Println("     Run 'ai-trailer configure --instructions' inside a repo to update them.")
 		}
 	} else {
-		fmt.Println("\n  ℹ  Skipping instruction files (--hook-only).")
+		fmt.Println("\n  ℹ  Instruction files unchanged (use --instructions to inject).")
 	}
 
 	for _, r := range selected {
