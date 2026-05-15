@@ -105,6 +105,61 @@ detect_tool() {
     return 1
 }
 
+# ── Model detection from parent process cmdline ───────────────────────
+
+extract_model_from_cmdline() {
+    local cmdline="$1"
+    # Patterns: --model <value>, -m <value>, --model=<value>
+    local model=""
+    # --model value
+    model=$(echo "$cmdline" | grep -oP '(?:^|\s)--model\s+"?\K[^\s"]+' | head -1 || true)
+    [ -n "$model" ] && { echo "$model"; return 0; }
+    # -m value
+    model=$(echo "$cmdline" | grep -oP '(?:^|\s)-m\s+"?\K[^\s"]+' | head -1 || true)
+    [ -n "$model" ] && { echo "$model"; return 0; }
+    # --model=value
+    model=$(echo "$cmdline" | grep -oP '(?:^|\s)--model="?\K[^"\s]+' | head -1 || true)
+    [ -n "$model" ] && { echo "$model"; return 0; }
+    return 1
+}
+
+detect_model_from_parent_process() {
+    # Strategy 1: Linux/WSL — read /proc/<ppid>/cmdline
+    if [ -f /proc/self/stat ]; then
+        local ppid=$(awk '{print $4}' /proc/self/stat)
+        for _ in $(seq 1 10); do
+            [ "$ppid" -le 1 ] && break
+            local pname=""
+            [ -f "/proc/$ppid/comm" ] && pname=$(tr -d '\0' < "/proc/$ppid/comm" 2>/dev/null || true)
+            if tool_from_process_name "$pname" >/dev/null 2>&1; then
+                local cmdline=""
+                [ -f "/proc/$ppid/cmdline" ] && cmdline=$(tr '\0' ' ' < "/proc/$ppid/cmdline" 2>/dev/null || true)
+                if [ -n "$cmdline" ]; then
+                    extract_model_from_cmdline "$cmdline" && return 0
+                fi
+            fi
+            ppid=$(awk '{print $4}' "/proc/$ppid/stat" 2>/dev/null || echo 1)
+        done
+    fi
+
+    # Strategy 2: macOS — use ps
+    if [ "$(uname -s)" = "Darwin" ]; then
+        local ppid=$PPID
+        for _ in $(seq 1 10); do
+            [ "$ppid" -le 1 ] && break
+            local pname=$(ps -o comm= -p "$ppid" 2>/dev/null || true)
+            if tool_from_process_name "$pname" >/dev/null 2>&1; then
+                local cmdline=$(ps -o args= -p "$ppid" 2>/dev/null || true)
+                if [ -n "$cmdline" ]; then
+                    extract_model_from_cmdline "$cmdline" && return 0
+                fi
+            fi
+            ppid=$(ps -o ppid= -p "$ppid" 2>/dev/null | tr -d ' ' || echo 1)
+        done
+    fi
+    return 1
+}
+
 TOOL=$(detect_tool) || true
 [ -z "$TOOL" ] && exit 0
 
@@ -179,7 +234,23 @@ detect_model() {
     MODEL=$(read_model_override)
     [ -n "$MODEL" ] && { echo "$MODEL"; return 0; }
 
-    # 2. Auto-detect from tool-specific config files
+    # 2. Runtime detection — read --model from parent process cmdline
+    MODEL=$(detect_model_from_parent_process)
+    [ -n "$MODEL" ] && { echo "$MODEL"; return 0; }
+
+    # 2b. Runtime env vars set by the tool (e.g., CLAUDE_MODEL, CODEX_MODEL)
+    # Tool-specific env vars take precedence over generic ones
+    case "$TOOL" in
+        claude-code|kilocode) MODEL="${CLAUDE_MODEL:-}" ;;
+        codex)                MODEL="${CODEX_MODEL:-}" ;;
+        opencode)             MODEL="${OPENCODE_MODEL:-}" ;;
+        gemini-cli)           MODEL="${GEMINI_MODEL:-}" ;;
+        github-copilot|copilot) MODEL="${COPILOT_MODEL:-}${GITHUB_COPILOT_MODEL:-}" ;;
+        aider)                MODEL="${AIDER_MODEL:-}" ;;
+    esac
+    [ -n "$MODEL" ] && { echo "$MODEL"; return 0; }
+
+    # 3. Auto-detect from tool-specific config files
     case "$TOOL" in
         claude-code|kilocode)
             MODEL=$(grep -oP '"model"\s*:\s*"\K[^"]+' "$HOME/.claude/settings.json" 2>/dev/null || true)
