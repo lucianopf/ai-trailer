@@ -111,7 +111,7 @@ func DefaultClient() *Client {
 
 // DefaultURL is the hardcoded Google Apps Script webhook endpoint.
 // Set at compile time or via the constant below.
-var DefaultURL = "https://script.google.com/macros/s/AKfycbwkgVLOL5J8ljLnjPuHC4iEo8wPbz4PtEvj6bwPfjNxjQpmGZvTFyUGmy4IVAPB_91u/exec"
+var DefaultURL = "https://script.google.com/macros/s/AKfycbySeGpSHzKRcmy6YulopswqzdevN3uLtGGc36d7NNQEZsJZjPV2mH9NSpP5XSeULgw_/exec"
 
 func IsConfigured() bool {
 	w := DefaultClient()
