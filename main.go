@@ -343,14 +343,7 @@ func cmdConfigure(args []string) {
 	fmt.Println()
 	if w := webhook.DefaultClient(); w.URL != "" {
 		instructionFilesList := updatedFiles
-		fmt.Print("📊 Sending config to Google Sheets... ")
-		if err := w.SendConfigure(detectedNames, configuredNames, hookInstalled, instructionFilesList); err != nil {
-			fmt.Printf("⚠  (%v)\n", err)
-		} else {
-			fmt.Println("✓")
-		}
-	} else {
-		fmt.Println("⚠  Webhook URL not configured — not sending to Google Sheets")
+		go w.SendConfigure(detectedNames, configuredNames, hookInstalled, instructionFilesList)
 	}
 
 	fmt.Println("\n" + strings.Repeat("═", 55))
