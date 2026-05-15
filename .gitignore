@@ -1,9 +1,7 @@
-# Binaries
-dist/
+# Binaries (local builds only — dist/ is tracked)
 ai-trailer
 
 # Go
-*.exe
 *.test
 *.out
 
