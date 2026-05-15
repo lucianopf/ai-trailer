@@ -106,10 +106,15 @@ func ConfigureClaudeMD(globalOnly bool) error {
 	instruction := `
 
 ## Git Attribution
-Always include the following trailer at the end of every git commit message:
+Always include these trailers at the end of every git commit message:
 ` + "```" + `
 Co-authored-by: Claude <noreply@anthropic.com>
+Ai-tool: claude-code
+Ai-model: <current model you are running on>
+Ai-os: <detected OS>
 ` + "```" + `
+Replace <current model you are running on> with your actual model (e.g., claude-sonnet-4, claude-opus-4).
+Replace <detected OS> with the OS you detect (linux, macos, windows, wsl).
 This is required for tracking AI-assisted commits.
 `
 
@@ -122,16 +127,20 @@ This is required for tracking AI-assisted commits.
 }
 
 // appendToFile appends content to a file, creating it if needed.
-// Skips if content already exists in the file.
+// Skips if the content is already up-to-date (checks for Ai-model which is new).
 func appendToFile(path, content string) error {
 	existing, err := os.ReadFile(path)
 	if err == nil {
-		// Check if instruction already present
-		if strings.Contains(string(existing), "Co-authored-by: Claude") {
-			fmt.Printf("  ✓ Already configured: %s\n", path)
+		// Check if new-format instruction already present
+		if strings.Contains(string(existing), "Ai-model:") {
+			fmt.Printf("  ✓ Already configured (v2): %s\n", path)
 			return nil
 		}
-		// Append to existing
+		// If old format exists, replace the old instruction block
+		if strings.Contains(string(existing), "Co-authored-by: Claude") {
+			oldBlock := "\n\n## Git Attribution\nAlways include the following trailer at the end of every git commit message:\n```\nCo-authored-by: Claude <noreply@anthropic.com>\n```\nThis is required for tracking AI-assisted commits.\n"
+			existing = []byte(strings.Replace(string(existing), oldBlock, "", 1))
+		}
 		content = strings.TrimRight(string(existing), "\n") + content
 	}
 	return os.WriteFile(path, []byte(content), 0644)
