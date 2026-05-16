@@ -69,6 +69,8 @@ func main() {
 		cmdVersion(args)
 	case "update":
 		cmdUpdate(args)
+	case "wrap":
+		cmdWrap(args)
 	case "help", "-h", "--help":
 		printUsage()
 	default:
@@ -97,6 +99,7 @@ Commands:
   version             Show version
   update              Download and install latest binary
   update --reconfigure  Update + re-run configure
+  wrap                Create model-capturing wrappers for AI tools
 
 Examples:
   ai-trailer detect                    # What AI tools are installed?
@@ -807,4 +810,116 @@ func cmdUpdate(args []string) {
 	if !reconfigure {
 		fmt.Println("   Run 'ai-trailer configure' to refresh hooks/files if needed.")
 	}
+}
+
+// ── wrap command ─────────────────────────────────────────────────────
+
+const wrapperTemplate = `#!/usr/bin/env bash
+# ai-trailer wrapper for __TOOL__ (auto-generated)
+# Captures --model/-m flag and saves to ~/.ai-trailer/current-model.
+MODEL_DIR="$HOME/.ai-trailer"
+MODEL_FILE="$MODEL_DIR/current-model"
+mkdir -p "$MODEL_DIR"
+
+# Extract --model, -m, or --model=value from args
+for i in $(seq 1 $#); do
+    eval "arg=\${$i}"
+    case "$arg" in
+        --model)
+            next=$((i+1))
+            eval "val=\${$next}"
+            if [ -n "$val" ] && [ "$val" != "-"* ]; then
+                echo "__TOOL__=$val" > "$MODEL_FILE"
+            fi
+            ;;
+        --model=*)
+            echo "__TOOL__=${arg#--model=}" > "$MODEL_FILE"
+            ;;
+        -m)
+            next=$((i+1))
+            eval "val=\${$next}"
+            if [ -n "$val" ] && [ "$val" != "-"* ]; then
+                echo "__TOOL__=$val" > "$MODEL_FILE"
+            fi
+            ;;
+    esac
+done
+
+# Exec the real tool (skip the wrapper to avoid infinite loop)
+REAL="__REAL_PATH__"
+exec "$REAL" "$@"
+`
+
+func cmdWrap(args []string) {
+	wrapDir := os.Getenv("HOME") + "/.ai-trailer/bin"
+	fmt.Println("\n🔧 Creating AI tool wrappers...")
+	fmt.Println(strings.Repeat("─", 55))
+
+	os.MkdirAll(wrapDir, 0755)
+
+	results := detect.DetectAll()
+	created := 0
+	for _, r := range results {
+		if !r.Found {
+			continue
+		}
+		// Find the real binary path
+		var realPath string
+		for _, binary := range r.Tool.Binaries {
+			if p, ok := detect.Which(binary); ok {
+				realPath = p
+				break
+			}
+		}
+		if realPath == "" {
+			continue
+		}
+
+		// Skip if realPath is already inside our wrap dir (avoid infinite wrap)
+		if strings.HasPrefix(realPath, wrapDir) {
+			continue
+		}
+
+		script := strings.ReplaceAll(wrapperTemplate, "__TOOL__", r.Tool.ID)
+		script = strings.ReplaceAll(script, "__REAL_PATH__", realPath)
+
+		// Use the first binary name as wrapper name
+		wrapperName := r.Tool.Binaries[0]
+		wrapperPath := wrapDir + "/" + wrapperName
+
+		// Check if already wrapped
+		if data, err := os.ReadFile(wrapperPath); err == nil && strings.Contains(string(data), "ai-trailer wrapper") {
+			fmt.Printf("  ✓ Already wrapped: %s → %s\n", wrapperName, realPath)
+			created++
+			continue
+		}
+
+		if err := os.WriteFile(wrapperPath, []byte(script), 0755); err != nil {
+			fmt.Printf("  ✗ Failed: %s (%v)\n", wrapperName, err)
+			continue
+		}
+		fmt.Printf("  ✓ Wrapped: %s → %s\n", wrapperName, realPath)
+		created++
+	}
+
+	fmt.Println(strings.Repeat("─", 55))
+	fmt.Printf("\n  %d wrapper(s) created in %s\n", created, wrapDir)
+
+	// Check PATH
+	if !strings.Contains(os.Getenv("PATH"), wrapDir) {
+		fmt.Println()
+		fmt.Println("  ⚠  Add this to your shell config so wrappers take priority:")
+		fmt.Println()
+		fmt.Printf("     export PATH=\"%s:$PATH\"\n", wrapDir)
+		fmt.Println()
+		fmt.Println("  Then restart your shell or run: source ~/.zshrc")
+	} else {
+		fmt.Println("\n  ✓ Wrapper directory already in PATH")
+	}
+
+	fmt.Println()
+	fmt.Println("  How it works:")
+	fmt.Println("    dev runs: codex --model gpt-5 ...")
+	fmt.Println("    wrapper:  saves 'codex=gpt-5' → ~/.ai-trailer/current-model")
+	fmt.Println("    hook:     reads current-model → Ai-model: gpt-5 ✅")
 }

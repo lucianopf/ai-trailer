@@ -230,7 +230,14 @@ read_model_override() {
 }
 
 detect_model() {
-    # 1. Manual override (highest priority)
+    # 0. Wrapper capture (highest priority — ai-trailer wrap)
+    MODEL_FILE="$HOME/.ai-trailer/current-model"
+    if [ -f "$MODEL_FILE" ]; then
+        MODEL=$(grep "^${TOOL}=" "$MODEL_FILE" 2>/dev/null | head -1 | cut -d= -f2-)
+        [ -n "$MODEL" ] && { echo "$MODEL"; return 0; }
+    fi
+
+    # 1. Manual override (~/.ai-trailer/models)
     MODEL=$(read_model_override)
     [ -n "$MODEL" ] && { echo "$MODEL"; return 0; }
 
