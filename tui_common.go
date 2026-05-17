@@ -11,17 +11,18 @@ import (
 
 // menuItem represents a selectable tool in the interactive menu.
 type menuItem struct {
-	ToolName string
-	Trailer  string
-	Selected bool
-	Detected bool // Was auto-detected (pre-selected)
-	IsNative bool // Has native trailer support
+	ToolName      string
+	ToolID        string
+	Trailer       string
+	Selected      bool
+	Detected      bool // Was auto-detected (pre-selected)
+	IsNative      bool // Has native trailer support
+	HasInstrument bool // Has well-known temp file for model tracking
 }
 
 // showTextMenu is the plain-text fallback used when:
 // - Running under fish shell (ANSI escapes break)
-// - Running under oh-my-zsh (themes conflict with raw mode)
-// - Non-Linux platforms
+// - Terminal is dumb (TERM=dumb)
 // - Terminal doesn't support raw mode
 func showTextMenu(items []menuItem) []menuItem {
 	fmt.Println()
@@ -86,7 +87,8 @@ func showTextMenu(items []menuItem) []menuItem {
 }
 
 // isBrokenShell returns true for shells that break raw ANSI TUI:
-// fish, oh-my-zsh, or dumb terminals.
+// fish or dumb terminals.  oh-my-zsh is no longer blocked — it works
+// fine on modern terminals (iTerm2, Alacritty, Kitty, WezTerm).
 func isBrokenShell() bool {
 	shell := os.Getenv("SHELL")
 	term := os.Getenv("TERM")
@@ -96,16 +98,6 @@ func isBrokenShell() bool {
 	}
 	if strings.Contains(shell, "fish") {
 		return true
-	}
-	// oh-my-zsh detection: $ZSH env var or ~/.oh-my-zsh directory
-	if os.Getenv("ZSH") != "" || os.Getenv("ZSH_THEME") != "" {
-		return true
-	}
-	home, _ := os.UserHomeDir()
-	if home != "" {
-		if _, err := os.Stat(home + "/.oh-my-zsh"); err == nil {
-			return true
-		}
 	}
 	return false
 }

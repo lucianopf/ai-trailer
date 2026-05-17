@@ -2,9 +2,14 @@
 package config
 
 // HookScript is the bash script installed as a prepare-commit-msg git hook.
-// It detects which AI tool is making the commit by checking environment
-// variables and parent processes, then appends the appropriate
-// Co-authored-by trailer.
+// It detects which AI tool is making the commit by checking parent processes
+// and environment variables, then appends Co-authored-by / Ai-tool / Ai-os /
+// Ai-model trailers.
+//
+// Model detection priority:
+//  0. Well-known temp files (per-tool instrumentation — 100% precise)
+//  1. Manual override (~/.ai-trailer/models)
+//  2. Config file defaults (fallback)
 const HookScript = `#!/usr/bin/env bash
 # ──────────────────────────────────────────────────────────────────────
 # AI Tool Git Trailer Hook (prepare-commit-msg)
@@ -19,7 +24,7 @@ COMMIT_SOURCE="${2:-}"
 # Skip for merges and squashes
 case "$COMMIT_SOURCE" in merge|squash) exit 0 ;; esac
 
-# ── Detection ────────────────────────────────────────────────────────
+# ── Tool Detection ───────────────────────────────────────────────────
 
 tool_from_process_name() {
     local pname="${1:-}"
@@ -45,8 +50,6 @@ tool_from_process_name() {
 }
 
 detect_env_tool() {
-    # Use only explicit runtime markers as a fallback. Broad prefixes can be
-    # inherited by other tools and cause false attribution.
     if env | grep -qE '^(CLAUDE_CODE_SIMPLE|CLAUDE_CODE_USE_BEDROCK|CLAUDE_CODE_USE_VERTEX|CLAUDE_CODE_USE_FOUNDRY)='; then
         echo "claude-code"; return 0
     fi
@@ -56,9 +59,6 @@ detect_env_tool() {
     if env | grep -qE '^COPILOT_|^GITHUB_COPILOT'; then
         echo "github-copilot"; return 0
     fi
-    if env | grep -qE '^CURSOR_'; then
-        echo "cursor"; return 0
-    fi
     if env | grep -qE '^AIDER_'; then
         echo "aider"; return 0
     fi
@@ -66,31 +66,25 @@ detect_env_tool() {
 }
 
 detect_parent_process_tool() {
-    # Strategy 1: Walk parent process tree (Linux/WSL)
+    # Linux/WSL: walk /proc parent chain
     if [ -f /proc/self/stat ]; then
         local ppid=$(awk '{print $4}' /proc/self/stat)
         for _ in $(seq 1 10); do
             [ "$ppid" -le 1 ] && break
             local pname=""
             [ -f "/proc/$ppid/comm" ] && pname=$(tr -d '\0' < "/proc/$ppid/comm" 2>/dev/null || true)
-            local tool=""
-            if tool=$(tool_from_process_name "$pname"); then
-                echo "$tool"; return 0
-            fi
+            if tool_from_process_name "$pname"; then return 0; fi
             ppid=$(awk '{print $4}' "/proc/$ppid/stat" 2>/dev/null || echo 1)
         done
     fi
 
-    # Strategy 2: macOS parent process walk
+    # macOS: walk ps parent chain
     if [ "$(uname -s)" = "Darwin" ]; then
         local ppid=$PPID
         for _ in $(seq 1 10); do
             [ "$ppid" -le 1 ] && break
             local pname=$(ps -o comm= -p "$ppid" 2>/dev/null || true)
-            local tool=""
-            if tool=$(tool_from_process_name "$pname"); then
-                echo "$tool"; return 0
-            fi
+            if tool_from_process_name "$pname"; then return 0; fi
             ppid=$(ps -o ppid= -p "$ppid" 2>/dev/null | tr -d ' ' || echo 1)
         done
     fi
@@ -98,65 +92,8 @@ detect_parent_process_tool() {
 }
 
 detect_tool() {
-    # Prefer the actual parent process tree. Env vars are often inherited
-    # across shells and nested tools, so they are only a fallback.
     detect_parent_process_tool && return 0
     detect_env_tool && return 0
-    return 1
-}
-
-# ── Model detection from parent process cmdline ───────────────────────
-
-extract_model_from_cmdline() {
-    local cmdline="$1"
-    # Patterns: --model <value>, -m <value>, --model=<value>
-    local model=""
-    # --model value
-    model=$(echo "$cmdline" | grep -oP '(?:^|\s)--model\s+"?\K[^\s"]+' | head -1 || true)
-    [ -n "$model" ] && { echo "$model"; return 0; }
-    # -m value
-    model=$(echo "$cmdline" | grep -oP '(?:^|\s)-m\s+"?\K[^\s"]+' | head -1 || true)
-    [ -n "$model" ] && { echo "$model"; return 0; }
-    # --model=value
-    model=$(echo "$cmdline" | grep -oP '(?:^|\s)--model="?\K[^"\s]+' | head -1 || true)
-    [ -n "$model" ] && { echo "$model"; return 0; }
-    return 1
-}
-
-detect_model_from_parent_process() {
-    # Strategy 1: Linux/WSL — read /proc/<ppid>/cmdline
-    if [ -f /proc/self/stat ]; then
-        local ppid=$(awk '{print $4}' /proc/self/stat)
-        for _ in $(seq 1 10); do
-            [ "$ppid" -le 1 ] && break
-            local pname=""
-            [ -f "/proc/$ppid/comm" ] && pname=$(tr -d '\0' < "/proc/$ppid/comm" 2>/dev/null || true)
-            if tool_from_process_name "$pname" >/dev/null 2>&1; then
-                local cmdline=""
-                [ -f "/proc/$ppid/cmdline" ] && cmdline=$(tr '\0' ' ' < "/proc/$ppid/cmdline" 2>/dev/null || true)
-                if [ -n "$cmdline" ]; then
-                    extract_model_from_cmdline "$cmdline" && return 0
-                fi
-            fi
-            ppid=$(awk '{print $4}' "/proc/$ppid/stat" 2>/dev/null || echo 1)
-        done
-    fi
-
-    # Strategy 2: macOS — use ps
-    if [ "$(uname -s)" = "Darwin" ]; then
-        local ppid=$PPID
-        for _ in $(seq 1 10); do
-            [ "$ppid" -le 1 ] && break
-            local pname=$(ps -o comm= -p "$ppid" 2>/dev/null || true)
-            if tool_from_process_name "$pname" >/dev/null 2>&1; then
-                local cmdline=$(ps -o args= -p "$ppid" 2>/dev/null || true)
-                if [ -n "$cmdline" ]; then
-                    extract_model_from_cmdline "$cmdline" && return 0
-                fi
-            fi
-            ppid=$(ps -o ppid= -p "$ppid" 2>/dev/null | tr -d ' ' || echo 1)
-        done
-    fi
     return 1
 }
 
@@ -184,25 +121,21 @@ case "$TOOL" in
     *)               exit 0 ;;
 esac
 
-# ── Append Trailers ───────────────────────────────────────────────────
+# ── Append Trailers (each checked independently) ─────────────────────
 
-# Check if Co-authored-by already exists (written by the AI tool itself)
 HAS_COAUTHOR=0
 if grep -qi "Co-authored-by:" "$COMMIT_MSG_FILE" 2>/dev/null; then
     HAS_COAUTHOR=1
 fi
 
-# Append Co-authored-by if not already present
 if [ "$HAS_COAUTHOR" -eq 0 ]; then
     printf "\n%s\n" "$TRAILER" >> "$COMMIT_MSG_FILE"
 fi
 
-# Always append Ai-tool if missing (tools often write Co-authored-by but not Ai-*)
 if ! grep -qi "Ai-tool:" "$COMMIT_MSG_FILE" 2>/dev/null; then
     printf "Ai-tool: %s\n" "$TOOL" >> "$COMMIT_MSG_FILE"
 fi
 
-# Detect OS and append Ai-os if missing
 if ! grep -qi "Ai-os:" "$COMMIT_MSG_FILE" 2>/dev/null; then
     case "$(uname -s)" in
         Linux)
@@ -218,144 +151,109 @@ if ! grep -qi "Ai-os:" "$COMMIT_MSG_FILE" 2>/dev/null; then
     printf "Ai-os: %s\n" "$AI_OS" >> "$COMMIT_MSG_FILE"
 fi
 
-# ── Detect model ────────────────────────────────────────────────────
-
-# read_model_override checks ~/.ai-trailer/models for a manual override.
-# Format: one tool_id=model per line. Highest priority.
-read_model_override() {
-    local override_file="$HOME/.ai-trailer/models"
-    if [ -f "$override_file" ]; then
-        grep "^${TOOL}=" "$override_file" 2>/dev/null | head -1 | cut -d= -f2-
-    fi
-}
+# ── Model Detection ─────────────────────────────────────────────────
+#
+# Priority:
+#   Layer 0 — Agent-side instrumentation temp files (100% precise)
+#   Layer 1 — Manual override (~/.ai-trailer/models)
+#   Layer 2 — Config file defaults (best-effort fallback)
 
 detect_model() {
-    # 0. Wrapper capture (highest priority — ai-trailer wrap)
-    MODEL_FILE="$HOME/.ai-trailer/current-model"
-    if [ -f "$MODEL_FILE" ]; then
-        MODEL=$(grep "^${TOOL}=" "$MODEL_FILE" 2>/dev/null | head -1 | cut -d= -f2-)
-        [ -n "$MODEL" ] && { echo "$MODEL"; return 0; }
-    fi
-
-    # 1. Manual override (~/.ai-trailer/models)
-    MODEL=$(read_model_override)
-    [ -n "$MODEL" ] && { echo "$MODEL"; return 0; }
-
-    # 2. Runtime detection — read --model from parent process cmdline
-    MODEL=$(detect_model_from_parent_process)
-    [ -n "$MODEL" ] && { echo "$MODEL"; return 0; }
-
-    # 2b. Runtime env vars set by the tool (e.g., CLAUDE_MODEL, CODEX_MODEL)
-    # Tool-specific env vars take precedence over generic ones
-    case "$TOOL" in
-        claude-code|kilocode) MODEL="${CLAUDE_MODEL:-}" ;;
-        codex)                MODEL="${CODEX_MODEL:-}" ;;
-        opencode)             MODEL="${OPENCODE_MODEL:-}" ;;
-        gemini-cli)           MODEL="${GEMINI_MODEL:-}" ;;
-        github-copilot|copilot) MODEL="${COPILOT_MODEL:-}${GITHUB_COPILOT_MODEL:-}" ;;
-        aider)                MODEL="${AIDER_MODEL:-}" ;;
-    esac
-    [ -n "$MODEL" ] && { echo "$MODEL"; return 0; }
-
-    # 3. Auto-detect from tool-specific config files
+    # ── Layer 0: Well-known temp files written by per-tool instrumentation ──
     case "$TOOL" in
         claude-code|kilocode)
-            MODEL=$(grep -oP '"model"\s*:\s*"\K[^"]+' "$HOME/.claude/settings.json" 2>/dev/null || true)
-            [ -z "$MODEL" ] && MODEL=$(grep -oP '"model"\s*:\s*"\K[^"]+' .claude/settings.json 2>/dev/null || true)
-            ;;
-        hermes)
-            MODEL=$(grep -oP '^\s*default:\s*\K\S+' "$HOME/.hermes/config.yaml" 2>/dev/null || true)
-            ;;
-        codex)
-            # Codex CLI config — try multiple locations
-            MODEL=$(grep -oP '"model"\s*:\s*"\K[^"]+' "$HOME/.codex/config.json" 2>/dev/null || true)
-            [ -z "$MODEL" ] && MODEL=$(grep -oP '"model"\s*:\s*"\K[^"]+' "$HOME/.config/codex/config.json" 2>/dev/null || true)
-            [ -z "$MODEL" ] && MODEL=$(grep -oP '"model"\s*:\s*"\K[^"]+' "$HOME/.codex/settings.json" 2>/dev/null || true)
-            # Also try env var
-            [ -z "$MODEL" ] && MODEL="${CODEX_MODEL:-}"
-            ;;
-        opencode)
-            # OpenCode config — try multiple locations and formats
-            for cfg in \
-                "$HOME/.opencode/config.json" \
-                "$HOME/.config/opencode/config.json" \
-                "$HOME/.opencode/settings.json" \
-                "$HOME/.opencode.json" \
-                ".opencode/config.json" \
-                ".opencode.json" \
-                "opencode.json"
-            do
-                [ -f "$cfg" ] && MODEL=$(grep -oP '"model"\s*:\s*"\K[^"]+' "$cfg" 2>/dev/null || true)
-                [ -n "$MODEL" ] && break
-            done
-            # Try env var
-            [ -z "$MODEL" ] && MODEL="${OPENCODE_MODEL:-}"
-            ;;
-        gemini-cli)
-            MODEL=$(grep -oP '"model"\s*:\s*"\K[^"]+' "$HOME/.gemini/settings.json" 2>/dev/null || true)
-            [ -z "$MODEL" ] && MODEL=$(grep -oP '"model"\s*:\s*"\K[^"]+' "$HOME/.config/gemini/settings.json" 2>/dev/null || true)
-            ;;
-        github-copilot|copilot)
-            # 2a. Copilot CLI — check gh config
-            MODEL=$(grep -oP 'model:\s*\K\S+' "$HOME/.config/gh/config.yml" 2>/dev/null || true)
-            # 2b. Copilot env vars
-            [ -z "$MODEL" ] && MODEL="${COPILOT_MODEL:-}"
-            [ -z "$MODEL" ] && MODEL="${GITHUB_COPILOT_MODEL:-}"
-            # 2c. VS Code / Cursor settings (for users who also have the extension)
-            if [ -z "$MODEL" ]; then
-                for settings in \
-                    "$HOME/Library/Application Support/Code/User/settings.json" \
-                    "$HOME/Library/Application Support/Cursor/User/settings.json" \
-                    "$HOME/.vscode-server/data/Machine/settings.json" \
-                    "$HOME/.config/Code/User/settings.json" \
-                    "$HOME/.config/Cursor/User/settings.json" \
-                    "$HOME/AppData/Roaming/Code/User/settings.json"
-                do
-                    if [ -f "$settings" ]; then
-                        MODEL=$(grep -oP '"github\.copilot\.(chat|selectedCompletion|advanced)\.?\w*[Mm]odel"\s*:\s*"\K[^"]+' "$settings" 2>/dev/null | head -1 || true)
-                        [ -n "$MODEL" ] && break
-                    fi
-                done
+            # Status line script writes model after every assistant message
+            if [ -f /tmp/claude-current-model ]; then
+                cat /tmp/claude-current-model && return 0
             fi
             ;;
+        hermes)
+            # Session JSON updated every turn — latest by mtime
+            local latest
+            latest=$(ls -t "$HOME/.hermes/sessions/session_"*.json 2>/dev/null | head -1)
+            if [ -n "$latest" ] && [ -f "$latest" ]; then
+                python3 -c "import json; print(json.load(open('$latest')).get('model',''))" 2>/dev/null && return 0
+            fi
+            ;;
+        codex)
+            # PreToolUse hook writes model on every tool call
+            if [ -f /tmp/codex-current-model ]; then
+                cat /tmp/codex-current-model && return 0
+            fi
+            ;;
+        opencode)
+            # Plugin writes model on session.updated events
+            if [ -f /tmp/opencode-current-model ]; then
+                cat /tmp/opencode-current-model && return 0
+            fi
+            ;;
+    esac
+
+    # ── Layer 1: Manual override (~/.ai-trailer/models) ──
+    local override_file="$HOME/.ai-trailer/models"
+    if [ -f "$override_file" ]; then
+        local override_model
+        override_model=$(grep "^${TOOL}=" "$override_file" 2>/dev/null | head -1 | cut -d= -f2-)
+        if [ -n "$override_model" ]; then
+            echo "$override_model" && return 0
+        fi
+    fi
+
+    # ── Layer 2: Config file defaults (best-effort) ──
+    case "$TOOL" in
+        claude-code|kilocode)
+            grep -oP '"model"\s*:\s*"\K[^"]+' "$HOME/.claude/settings.json" 2>/dev/null && return 0
+            grep -oP '"model"\s*:\s*"\K[^"]+' .claude/settings.json 2>/dev/null && return 0
+            ;;
+        hermes)
+            grep -oP '^\s*default:\s*\K\S+' "$HOME/.hermes/config.yaml" 2>/dev/null && return 0
+            ;;
+        codex)
+            grep -oP '^\s*model\s*=\s*"\K[^"]+' "$HOME/.codex/config.toml" 2>/dev/null && return 0
+            ;;
+        opencode)
+            for cfg in "$HOME/.config/opencode/opencode.json" "opencode.json"; do
+                [ -f "$cfg" ] && grep -oP '"model"\s*:\s*"\K[^"]+' "$cfg" 2>/dev/null && return 0
+            done
+            ;;
+        gemini-cli)
+            grep -oP '"model"\s*:\s*"\K[^"]+' "$HOME/.gemini/settings.json" 2>/dev/null && return 0
+            grep -oP '"model"\s*:\s*"\K[^"]+' "$HOME/.config/gemini/settings.json" 2>/dev/null && return 0
+            ;;
         aider)
-            MODEL=$(grep -oP '^\s*model:\s*\K\S+' .aider.conf.yml 2>/dev/null || true)
-            [ -z "$MODEL" ] && MODEL=$(grep -oP '^\s*model:\s*\K\S+' "$HOME/.aider.conf.yml" 2>/dev/null || true)
-            ;;
-        cody)
-            MODEL=$(grep -oP '"model"\s*:\s*"\K[^"]+' "$HOME/.cody/config.json" 2>/dev/null || true)
-            ;;
-        windsurf)
-            MODEL=$(grep -oP '"model"\s*:\s*"\K[^"]+' "$HOME/.windsurf/settings.json" 2>/dev/null || true)
-            [ -z "$MODEL" ] && MODEL=$(grep -oP '"model"\s*:\s*"\K[^"]+' "$HOME/.codeium/config.json" 2>/dev/null || true)
+            grep -oP '^\s*model:\s*\K\S+' .aider.conf.yml 2>/dev/null && return 0
+            grep -oP '^\s*model:\s*\K\S+' "$HOME/.aider.conf.yml" 2>/dev/null && return 0
             ;;
         cursor)
-            # Cursor stores model in settings.json (VS Code-compatible)
             for settings in \
                 "$HOME/Library/Application Support/Cursor/User/settings.json" \
                 "$HOME/.config/Cursor/User/settings.json" \
                 "$HOME/.cursor/settings.json" \
-                "$HOME/AppData/Roaming/Cursor/User/settings.json"
-            do
+                "$HOME/AppData/Roaming/Cursor/User/settings.json"; do
                 if [ -f "$settings" ]; then
-                    MODEL=$(grep -oP '"cursor\.(chat\.)?[Mm]odel"\s*:\s*"\K[^"]+' "$settings" 2>/dev/null | head -1 || true)
-                    [ -n "$MODEL" ] && break
+                    grep -oP '"cursor\.(chat\.)?[Mm]odel"\s*:\s*"\K[^"]+' "$settings" 2>/dev/null | head -1 && return 0
                 fi
             done
-            [ -z "$MODEL" ] && MODEL="unknown"
+            ;;
+        github-copilot)
+            grep -oP 'model:\s*\K\S+' "$HOME/.config/gh/config.yml" 2>/dev/null && return 0
+            ;;
+        cody)
+            grep -oP '"model"\s*:\s*"\K[^"]+' "$HOME/.cody/config.json" 2>/dev/null && return 0
+            ;;
+        windsurf)
+            grep -oP '"model"\s*:\s*"\K[^"]+' "$HOME/.windsurf/settings.json" 2>/dev/null && return 0
+            grep -oP '"model"\s*:\s*"\K[^"]+' "$HOME/.codeium/config.json" 2>/dev/null && return 0
             ;;
         continue)
-            MODEL=$(grep -oP '"model"\s*:\s*"\K[^"]+' "$HOME/.continue/config.json" 2>/dev/null || true)
+            grep -oP '"model"\s*:\s*"\K[^"]+' "$HOME/.continue/config.json" 2>/dev/null && return 0
             ;;
         amazon-q)
-            MODEL=$(grep -oP '"model"\s*:\s*"\K[^"]+' "$HOME/.aws/q/config.json" 2>/dev/null || true)
-            ;;
-        *)
-            MODEL=""
+            grep -oP '"model"\s*:\s*"\K[^"]+' "$HOME/.aws/q/config.json" 2>/dev/null && return 0
             ;;
     esac
-    [ -z "$MODEL" ] && MODEL="unknown"
-    echo "$MODEL"
+
+    echo "unknown"
 }
 
 AI_MODEL=$(detect_model)

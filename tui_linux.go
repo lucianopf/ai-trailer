@@ -61,7 +61,7 @@ func isTerminal(fd int) bool {
 }
 
 func showInteractiveMenu(items []menuItem) []menuItem {
-	// Fish shell and oh-my-zsh break ANSI escape codes — use plain-text fallback
+	// Fish shell and dumb terminals break ANSI escape codes
 	if isBrokenShell() {
 		return showTextMenu(items)
 	}
