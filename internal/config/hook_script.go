@@ -45,8 +45,26 @@ else
         MODEL=$(echo "$_codex_line" | sed 's/.*<\([^>]*\)>/\1/')
     # ── Copilot: detect from its native Co-authored-by trailer ────────
     # GitHub Copilot CLI injects "Co-authored-by: Copilot <...>" before the hook.
+    # Model is read from VS Code's state DB (sqlite3): the key
+    # chat.currentLanguageModel.panel.copilotcli stores e.g. "copilotcli/claude-opus-4.6".
     elif grep -qi "Co-authored-by: Copilot <" "$COMMIT_MSG_FILE" 2>/dev/null; then
         TOOL="github-copilot"
+        if command -v sqlite3 &>/dev/null; then
+            for _db in \
+                "$HOME/Library/Application Support/Code/User/globalStorage/state.vscdb" \
+                "$HOME/.config/Code/User/globalStorage/state.vscdb" \
+                "$HOME/.config/Code - Insiders/User/globalStorage/state.vscdb"; do
+                if [ -f "$_db" ]; then
+                    _raw=$(sqlite3 "$_db" \
+                        "SELECT value FROM ItemTable WHERE key='chat.currentLanguageModel.panel.copilotcli';" \
+                        2>/dev/null)
+                    if [ -n "$_raw" ]; then
+                        MODEL=$(echo "$_raw" | sed 's|.*/||')
+                        break
+                    fi
+                fi
+            done
+        fi
     else
         # ── Session file fallback (for Codex versions without native trailer) ──
         _sf="$HOME/.ai-trailer/codex-model"
