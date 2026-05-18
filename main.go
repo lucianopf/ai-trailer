@@ -187,7 +187,8 @@ func cmdConfigure(args []string) {
 	}
 	if detectedCount == 0 {
 		fmt.Println("\n⚠  No AI coding tools auto-detected.")
-		fmt.Println("   Showing all supported tools — select the ones you have installed.\n")
+		fmt.Println("   Showing all supported tools — select the ones you have installed.")
+		fmt.Println()
 	}
 
 	menuItems = showInteractiveMenu(menuItems)
