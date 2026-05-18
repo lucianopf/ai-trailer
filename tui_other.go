@@ -122,12 +122,22 @@ func showInteractiveMenu(items []menuItem) []menuItem {
 	return items
 }
 
+// pr prints a line with explicit \r\n so the cursor returns to column 0
+// regardless of whether the terminal has opost/onlcr enabled.
+func pr(format string, args ...any) {
+	if len(args) == 0 {
+		fmt.Print(format + "\r\n")
+	} else {
+		fmt.Printf(format+"\r\n", args...)
+	}
+}
+
 func renderMenu(items []menuItem, cursor int, help string) {
-	fmt.Print("\033[2J\033[H")
-	fmt.Println()
-	fmt.Println("  ⚙  AI Trailer Configuration")
-	fmt.Println("  " + strings.Repeat("─", 55))
-	fmt.Println()
+	fmt.Print("\033[2J\033[H") // clear screen, cursor to home
+	pr("")
+	pr("  ⚙  AI Trailer Configuration")
+	pr("  " + strings.Repeat("─", 55))
+	pr("")
 
 	selectedCount := 0
 	for _, item := range items {
@@ -135,43 +145,43 @@ func renderMenu(items []menuItem, cursor int, help string) {
 			selectedCount++
 		}
 	}
-	fmt.Printf("  Select AI tools to configure (%d/%d selected)\n\n", selectedCount, len(items))
+	pr("  Select AI tools to configure (%d/%d selected)", selectedCount, len(items))
+	pr("")
 
 	for i, item := range items {
+		line := "  "
 		if i == cursor {
-			fmt.Print("  \033[7m") // reverse video
-		} else {
-			fmt.Print("  ")
+			line = "  \033[7m"
 		}
 		if item.Selected {
-			fmt.Print("[✓] ")
+			line += "[✓] "
 		} else {
-			fmt.Print("[ ] ")
+			line += "[ ] "
 		}
 		display := item.ToolName
 		if item.IsNative {
 			display += " (native)"
 		}
-		fmt.Print(padRight(display, 36))
+		line += padRight(display, 36)
 		if item.Detected {
-			fmt.Print(" \033[32m● detected\033[0m")
+			line += " \033[32m● detected\033[0m"
 		} else {
-			fmt.Print(" \033[90m○ not found\033[0m")
+			line += " \033[90m○ not found\033[0m"
 		}
 		if i == cursor {
-			fmt.Print("\n   \033[7m  ↳ " + truncateStr(item.Trailer, 55) + "\033[0m")
+			line += "\033[0m"
 		}
+		pr("%s", line)
 		if i == cursor {
-			fmt.Print("\033[0m")
+			pr("     \033[7m↳ %s\033[0m", truncateStr(item.Trailer, 55))
 		}
-		fmt.Println()
 	}
-	fmt.Println()
-	fmt.Println("  " + strings.Repeat("─", 55))
+	pr("")
+	pr("  " + strings.Repeat("─", 55))
 	fmt.Print("  \033[90m" + help + "\033[0m")
 }
 
-func clearScreen() { fmt.Print("\033[2J\033[H") }
+func clearScreen() { fmt.Print("\033[2J\033[H\r") }
 func padRight(s string, width int) string {
 	if len(s) >= width {
 		return s
