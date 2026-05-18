@@ -244,3 +244,5 @@ O hook foi desenhado para não bloquear commits:
 O objetivo é enriquecer o histórico de commits sem quebrar o fluxo normal de desenvolvimento.
 
 Linha adicionada pelo Copilot em 2026-05-18T11:51:48-03:00
+
+Linha adicionada pelo Copilot em 2026-05-18T12:00:06-03:00
