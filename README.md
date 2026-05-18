@@ -237,3 +237,5 @@ O hook foi desenhado para não bloquear commits:
 - só adiciona cada trailer se ele ainda não existir na mensagem.
 
 O objetivo é enriquecer o histórico de commits sem quebrar o fluxo normal de desenvolvimento.
+
+<!-- test: claude-code model detection via native trailer -->
