@@ -1,0 +1,22 @@
+internal/config/config.go
+  s_19a8b192de08c4::t_c5dfff7dae4606 377-386,388-389,405,411-416
+main.go
+  s_19a8b192de08c4::t_4f3690e17bc6ff 230-236
+  s_19a8b192de08c4::t_72e009f46a1cac 41
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.8",
+  "base_commit_sha": "0fff6f1600fda4452eff90dd47bf16fb25fc1f05",
+  "prompts": {},
+  "sessions": {
+    "s_19a8b192de08c4": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "2938bb0e-c24b-4c58-a8ac-bff04f59bd42",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": "lucianopf <lucianopf@outlook.com>"
+    }
+  }
+}
