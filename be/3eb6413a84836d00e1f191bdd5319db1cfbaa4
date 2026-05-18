@@ -1,0 +1,26 @@
+main.go
+  s_19a8b192de08c4::t_4ae1666391d631 577-640
+  s_19a8b192de08c4::t_d9934b010e6e22 230-231,236,238-239,241-244
+  s_19a8b192de08c4::t_6a192c1f04003a 90,92,104,108-114
+  s_19a8b192de08c4::t_85a178f5d4b9a3 32
+  s_19a8b192de08c4::t_2ff84f11e72c30 72-73
+  s_19a8b192de08c4::t_c24d69710d675f 173-178
+tui_common.go
+  s_19a8b192de08c4::t_09ead2516b7203 14-19
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.8",
+  "base_commit_sha": "be3eb6413a84836d00e1f191bdd5319db1cfbaa4",
+  "prompts": {},
+  "sessions": {
+    "s_19a8b192de08c4": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "2938bb0e-c24b-4c58-a8ac-bff04f59bd42",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": "lucianopf <lucianopf@outlook.com>"
+    }
+  }
+}
