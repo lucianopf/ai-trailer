@@ -258,3 +258,5 @@ Linha adicionada pelo OpenCode em 2026-05-18T12:46:52-0300
 Linha adicionada pelo OpenCode em 2026-05-18T12:52:00-0300
 
 Linha adicionada pelo OpenCode em 2026-05-18T13:02:00-0300
+
+Linha adicionada pelo OpenCode em 2026-05-18T13:03:07-0300
