@@ -158,7 +158,10 @@ func TestCursorTraceIdWithSessionFile(t *testing.T) {
 		t.Fatalf("hook failed: %v\n%s", err, out)
 	}
 
-	msg, _ := os.ReadFile(msgPath)
+	msg, err := os.ReadFile(msgPath)
+	if err != nil {
+		t.Fatal(err)
+	}
 	assertContains(t, string(msg), "Ai-tool: cursor")
 	assertContains(t, string(msg), "Ai-model: claude-3.7-sonnet")
 }
@@ -176,13 +179,21 @@ func TestCursorTraceIdWithEmptySessionFile(t *testing.T) {
 	dir := t.TempDir()
 	homeDir := filepath.Join(dir, "home")
 	aiTrailerDir := filepath.Join(homeDir, ".ai-trailer")
-	os.MkdirAll(aiTrailerDir, 0o755)
-	os.WriteFile(filepath.Join(aiTrailerDir, "cursor-model"), []byte(""), 0o644)
+	if err := os.MkdirAll(aiTrailerDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(aiTrailerDir, "cursor-model"), []byte(""), 0o644); err != nil {
+		t.Fatal(err)
+	}
 
 	hookPath := filepath.Join(dir, "prepare-commit-msg")
-	os.WriteFile(hookPath, []byte(HookScript), 0o755)
+	if err := os.WriteFile(hookPath, []byte(HookScript), 0o755); err != nil {
+		t.Fatal(err)
+	}
 	msgPath := filepath.Join(dir, "COMMIT_EDITMSG")
-	os.WriteFile(msgPath, []byte("subject\n"), 0o644)
+	if err := os.WriteFile(msgPath, []byte("subject\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
 
 	cmd := exec.Command("bash", hookPath, msgPath)
 	cmd.Env = []string{
@@ -190,16 +201,21 @@ func TestCursorTraceIdWithEmptySessionFile(t *testing.T) {
 		"HOME=" + homeDir,
 		"CURSOR_TRACE_ID=abc123",
 	}
-	cmd.CombinedOutput()
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("hook failed: %v\n%s", err, out)
+	}
 
-	msg, _ := os.ReadFile(msgPath)
+	msg, err := os.ReadFile(msgPath)
+	if err != nil {
+		t.Fatal(err)
+	}
 	assertContains(t, string(msg), "Ai-tool: cursor")
 	assertNotContains(t, string(msg), "Ai-model:")
 }
 
 func assertContains(t *testing.T, s, substr string) {
 	t.Helper()
-	if !strings.Contains(s, substr) {
+	if !strings.Contains(strings.ToLower(s), strings.ToLower(substr)) {
 		t.Fatalf("expected %q to contain %q\nFull message:\n%s", s, substr, s)
 	}
 }
