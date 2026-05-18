@@ -11,20 +11,18 @@ import (
 
 // Tool represents an AI coding tool with its metadata and detection methods.
 type Tool struct {
-	ID                 string   // Unique identifier (e.g., "claude-code")
-	Name               string   // Human-readable name
-	Slug               string   // Short slug for CLI
-	Trailer            string   // Co-authored-by trailer string
-	NativeTrailer      bool     // Whether tool natively adds trailers
-	Binaries           []string // Binary names to search in PATH
-	NpmPackages        []string // npm global packages
-	PipPackages        []string // pip packages
-	BrewPackages       []string // Homebrew formula names
-	ConfigPaths        []string // Config file paths (with ~/ expanded)
-	EnvMarkers         []string // Environment variables that indicate tool is running
-	ProcNames          []string // Process names for parent-process detection
-	InstrumentTempFile string   // Well-known temp file for model tracking (empty if none)
-	InstrumentSetup    string   // Description of how to set up model instrumentation
+	ID            string   // Unique identifier (e.g., "claude-code")
+	Name          string   // Human-readable name
+	Slug          string   // Short slug for CLI
+	Trailer       string   // Co-authored-by trailer string
+	NativeTrailer bool     // Whether tool natively adds trailers
+	Binaries      []string // Binary names to search in PATH
+	NpmPackages   []string // npm global packages
+	PipPackages   []string // pip packages
+	BrewPackages  []string // Homebrew formula names
+	ConfigPaths   []string // Config file paths (with ~/ expanded)
+	EnvMarkers    []string // Environment variables that indicate tool is running
+	ProcNames     []string // Process names for parent-process detection
 }
 
 // Tools is the registry of all known AI coding tools.
@@ -41,20 +39,6 @@ var Tools = []Tool{
 		ConfigPaths:   []string{"~/.claude/settings.json"},
 		EnvMarkers:    []string{"CLAUDE_CODE_SIMPLE", "CLAUDE_CODE_USE_BEDROCK", "CLAUDE_CODE_USE_VERTEX", "CLAUDE_CODE_USE_FOUNDRY"},
 		ProcNames:     []string{"claude", "claude-code"},
-		InstrumentTempFile: "/tmp/claude-current-model",
-		InstrumentSetup:    "Modify ~/.claude/statusline-command.sh to write model to /tmp/claude-current-model",
-	},
-	{
-		ID:            "codex",
-		Name:          "OpenAI Codex CLI",
-		Slug:          "codex",
-		Trailer:       "Co-authored-by: OpenAI Codex <noreply@openai.com>",
-		NativeTrailer: false,
-		Binaries:      []string{"codex"},
-		NpmPackages:   []string{"@openai/codex"},
-		ConfigPaths:   []string{"~/.codex/config.json"},
-		EnvMarkers:    []string{"OPENAI_API_KEY"},
-		ProcNames:     []string{"codex", "codex-cli"},
 	},
 	{
 		ID:            "gemini-cli",
@@ -80,8 +64,6 @@ var Tools = []Tool{
 		ConfigPaths:   []string{"~/.codex/config.toml"},
 		EnvMarkers:    []string{"OPENAI_API_KEY"},
 		ProcNames:     []string{"codex", "codex-cli"},
-		InstrumentTempFile: "/tmp/codex-current-model",
-		InstrumentSetup:    "Install ~/.codex/hooks.json with PreToolUse hook + ~/.codex/hooks/model-dump.sh",
 	},
 	{
 		ID:            "github-copilot",
@@ -106,8 +88,6 @@ var Tools = []Tool{
 		ConfigPaths:   []string{"~/.hermes/config.yaml"},
 		EnvMarkers:    []string{"HERMES_HOME", "HERMES_SESSION_ID", "_HERMES_GATEWAY"},
 		ProcNames:     []string{"hermes"},
-		InstrumentTempFile: "$HOME/.hermes/sessions/session_*.json",
-		InstrumentSetup:    "Built-in — session JSON has model field natively. No setup needed.",
 	},
 	{
 		ID:            "opencode",
@@ -120,8 +100,6 @@ var Tools = []Tool{
 		BrewPackages:  []string{"opencode"},
 		EnvMarkers:    []string{},
 		ProcNames:     []string{"opencode"},
-		InstrumentTempFile: "/tmp/opencode-current-model",
-		InstrumentSetup:    "Install plugin in ~/.config/opencode/plugins/ that writes model on session.updated events",
 	},
 	{
 		ID:            "kilocode",
@@ -133,8 +111,6 @@ var Tools = []Tool{
 		NpmPackages:   []string{"@kilocode/cli"},
 		EnvMarkers:    []string{},
 		ProcNames:     []string{"kilocode"},
-		InstrumentTempFile: "/tmp/claude-current-model",
-		InstrumentSetup:    "Shares Claude Code's status line — same /tmp/claude-current-model file",
 	},
 
 	// ── Open-Source AI Coding Assistants ──────────────────────────
