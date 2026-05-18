@@ -128,6 +128,22 @@ func TestClaudeWinsOverHermesWhenBothPresent(t *testing.T) {
 	assertNotContains(t, msg, "Ai-tool: hermes")
 }
 
+func TestCodexNativeTrailerDetectsToolAndModel(t *testing.T) {
+	// Codex CLI injects "Co-authored-by: Codex <model>" before the hook runs.
+	// The hook should detect this, skip adding another Co-authored-by,
+	// and still append Ai-tool + Ai-model.
+	initial := "docs: add README\n\nCo-authored-by: Codex <GPT-5 high>\n"
+	msg := runHook(t, initial, "", map[string]string{})
+
+	assertContains(t, msg, "Ai-tool: codex")
+	assertContains(t, msg, "Ai-model: GPT-5 high")
+	// Must NOT duplicate the Co-authored-by line
+	count := strings.Count(strings.ToLower(msg), "co-authored-by:")
+	if count != 1 {
+		t.Fatalf("expected 1 Co-authored-by line, got %d:\n%s", count, msg)
+	}
+}
+
 func TestCursorTraceIdWithSessionFile(t *testing.T) {
 	dir := t.TempDir()
 	homeDir := filepath.Join(dir, "home")

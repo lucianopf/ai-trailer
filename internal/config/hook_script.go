@@ -37,11 +37,19 @@ elif [ -n "${CURSOR_TRACE_ID:-}" ]; then
         MODEL=$(tr -d '[:space:]' < "$_sf")
     fi
 else
-    # ── Session file fallback for Codex (file newer than 60 min = active) ──
-    _sf="$HOME/.ai-trailer/codex-model"
-    if [ -n "$(find "$_sf" -mmin -60 -type f 2>/dev/null)" ]; then
+    # ── Codex: detect from its native Co-authored-by trailer ──────────
+    # Codex CLI injects "Co-authored-by: Codex <model>" before the hook runs.
+    _codex_line=$(grep -i "Co-authored-by: Codex <" "$COMMIT_MSG_FILE" 2>/dev/null | head -1)
+    if [ -n "$_codex_line" ]; then
         TOOL="codex"
-        MODEL=$(tr -d '[:space:]' < "$_sf")
+        MODEL=$(echo "$_codex_line" | sed 's/.*<\([^>]*\)>/\1/')
+    else
+        # ── Session file fallback (for Codex versions without native trailer) ──
+        _sf="$HOME/.ai-trailer/codex-model"
+        if [ -n "$(find "$_sf" -mmin -60 -type f 2>/dev/null)" ]; then
+            TOOL="codex"
+            MODEL=$(tr -d '[:space:]' < "$_sf")
+        fi
     fi
 fi
 
