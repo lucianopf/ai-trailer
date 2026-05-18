@@ -2,6 +2,8 @@
 
 CLI multiplataforma para identificar commits assistidos por ferramentas de IA e adicionar trailers padronizados nas mensagens de commit.
 
+Linha de validação: alteração pequena para validar o fluxo de commit.
+
 O `ai-trailer` instala um `prepare-commit-msg` global do Git que detecta a ferramenta de IA ativa, descobre o modelo quando possível e acrescenta metadados como:
 
 ```text
