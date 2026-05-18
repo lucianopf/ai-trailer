@@ -275,6 +275,16 @@ func TestOpenCodeRecentDBDetectsToolAndModel(t *testing.T) {
 		t.Fatalf("sqlite3 setup failed: %v\n%s", err, out)
 	}
 
+	// Create a fake pgrep that succeeds for "opencode" (simulates active process)
+	fakeBin := filepath.Join(dir, "bin")
+	if err := os.MkdirAll(fakeBin, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	fakePgrep := "#!/usr/bin/env bash\nexit 0\n"
+	if err := os.WriteFile(filepath.Join(fakeBin, "pgrep"), []byte(fakePgrep), 0o755); err != nil {
+		t.Fatal(err)
+	}
+
 	hookPath := filepath.Join(dir, "prepare-commit-msg")
 	if err := os.WriteFile(hookPath, []byte(HookScript), 0o755); err != nil {
 		t.Fatal(err)
@@ -286,9 +296,8 @@ func TestOpenCodeRecentDBDetectsToolAndModel(t *testing.T) {
 
 	cmd := exec.Command("bash", hookPath, msgPath)
 	cmd.Env = []string{
-		"PATH=" + os.Getenv("PATH"),
+		"PATH=" + fakeBin + ":" + os.Getenv("PATH"),
 		"HOME=" + homeDir,
-		// No OPENCODE_RUN_ID — detection is purely by DB mtime
 	}
 	if out, err := cmd.CombinedOutput(); err != nil {
 		t.Fatalf("hook failed: %v\n%s", err, out)

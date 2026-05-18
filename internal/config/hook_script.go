@@ -65,8 +65,11 @@ else
                 fi
             done
         fi
-    # ── OpenCode: detect by recent DB activity (no env var propagated) ───
-    elif [ -n "$(find "$HOME/.local/share/opencode/opencode.db" -mmin -10 -type f 2>/dev/null)" ] \
+    # ── OpenCode: detect by active process + recent DB activity ──────────
+    # Both conditions required to avoid false positives when another tool
+    # commits shortly after an OpenCode session ends.
+    elif pgrep -q "opencode" 2>/dev/null \
+         && [ -n "$(find "$HOME/.local/share/opencode/opencode.db" -mmin -10 -type f 2>/dev/null)" ] \
          && command -v sqlite3 &>/dev/null; then
         TOOL="opencode"
         _oc_model_json=$(sqlite3 "$HOME/.local/share/opencode/opencode.db" \
