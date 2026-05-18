@@ -14,9 +14,11 @@ A implementação atual acumulou múltiplas estratégias de detecção:
 - 3 camadas de fallback no `detect_model()` — diffícil de manter, difícil de testar
 - `installClaudeStatusLine()`, `installCodexHooks()`, `installOpenCodePlugin()` — mecanismos distintos, cada um com sua forma de quebrar
 
-## Insight
+## Princípios
 
-Quando uma ferramenta de IA executa `git commit` como subprocesso, o processo filho **herda o ambiente do pai**. As ferramentas já expõem vars de ambiente que identificam a sessão. Não é necessário processo daemon, session file, ou temp files.
+**Modelo é obrigatório.** Se não conseguimos saber o modelo, preferimos não escrever o trailer a escrever dados incompletos. `Ai-tool` sem `Ai-model` só é aceitável para ferramentas que comprovadamente não expõem o modelo (ex: Cursor).
+
+**Env vars quando garantido, PreToolUse quando não.** Para ferramentas que confirmadamente expõem modelo via env var no subprocesso (`CLAUDE_MODEL`, `HERMES_MODEL`, etc.) — env var puro, sem setup extra. Para ferramentas onde o env var não é garantido (Codex, Cursor) — `ai-trailer configure` instala um PreToolUse hook mínimo que escreve o modelo num arquivo em `~/.ai-trailer/`.
 
 Quando o commit é feito fora do contexto da ferramenta (terminal separado), o hook sai silenciosamente — comportamento correto.
 
@@ -26,17 +28,28 @@ Quando o commit é feito fora do contexto da ferramenta (terminal separado), o h
 
 ### Hook `prepare-commit-msg`
 
-Leitura de env vars em ordem de prioridade. Primeira que bater, vence.
+Duas fontes de dados, consultadas nessa ordem por ferramenta:
 
-| Ferramenta | Var de detecção | Var de modelo |
+**Fonte 1 — env vars** (ferramentas com garantia de modelo no subprocesso):
+
+| Ferramenta | Var de detecção | Var de modelo | Garantia |
+|---|---|---|---|
+| Claude Code | `CLAUDE_MODEL` | `CLAUDE_MODEL` | ✅ confirmado |
+| Hermes | `HERMES_SESSION` | `HERMES_MODEL` | ✅ confirmado |
+| OpenCode | `OPENCODE_MODEL` | `OPENCODE_MODEL` | ✅ confirmado |
+| Gemini CLI | `GEMINI_MODEL` | `GEMINI_MODEL` | ✅ confirmado |
+| Copilot | `Co-authored-by` já no msg | — | nativo, sem model |
+
+**Fonte 2 — session files** (ferramentas onde env var não é garantido):
+
+Arquivo escrito pelo PreToolUse hook instalado pelo `configure`. Formato: texto simples, uma linha com o model ID.
+
+| Ferramenta | Session file | Escrito por |
 |---|---|---|
-| Claude Code | `CLAUDE_MODEL` | `CLAUDE_MODEL` |
-| Codex | `CODEX_SANDBOX_ENV` ou `OPENAI_CODEX_*` | `OPENAI_MODEL` |
-| Cursor | `CURSOR_TRACE_ID` | — (não exposto) |
-| Hermes | `HERMES_SESSION` | `HERMES_MODEL` |
-| OpenCode | `OPENCODE_MODEL` | `OPENCODE_MODEL` |
-| Gemini CLI | `GEMINI_MODEL` | `GEMINI_MODEL` |
-| Copilot | `Co-authored-by` já no commit msg | — |
+| Codex | `~/.ai-trailer/codex-model` | PreToolUse hook em `~/.codex/hooks/` |
+| Cursor | `~/.ai-trailer/cursor-model` | PreToolUse hook (se Cursor suportar) |
+
+O hook lê o session file só quando a ferramenta é detectada (ex: `CURSOR_TRACE_ID` presente) mas a var de modelo não está disponível.
 
 **Trailers escritos:**
 ```
@@ -48,21 +61,20 @@ Co-authored-by: Claude <noreply@anthropic.com>
 
 Regras:
 - Skip em commits de merge e squash (`COMMIT_SOURCE`)
-- `Ai-model` omitido se ferramenta não expõe modelo
+- `Ai-model` omitido apenas se ferramenta comprovadamente não expõe modelo (Cursor) e session file não existe
 - `Co-authored-by` omitido se já presente no commit message
-- Se nenhuma var de detecção encontrada → exit 0, sem modificação
+- Se nenhuma detecção → exit 0, sem modificação
 
 ### Hook script (Go embed)
 
-`hook_script.go` fica com ~50 linhas. Sem `detect_parent_process_tool()`, sem `detect_model()` em camadas, sem referências a `/tmp/*-current-model`.
+`hook_script.go` fica com ~70 linhas. Sem `detect_parent_process_tool()`, sem `detect_model()` em 3 camadas, sem referências a `/tmp/*-current-model`. Session files ficam em `~/.ai-trailer/` (não em `/tmp/`).
 
 ### CLI — o que muda
 
-**`configure`:** só instala o git hook globalmente via `core.hooksPath`. Remove:
-- `installClaudeStatusLine()`
-- `installCodexHooks()`
-- `installOpenCodePlugin()`
-- Campos `InstrumentTempFile` / `InstrumentSetup` nos Tool structs
+**`configure`:** instala o git hook globalmente + PreToolUse hooks para ferramentas que precisam de session file (Codex, Cursor). Remove:
+- `installClaudeStatusLine()` — substituído por env var direta
+- `installOpenCodePlugin()` — substituído por env var direta
+- Campos `InstrumentTempFile` / `InstrumentSetup` nos Tool structs — substituídos pela tabela acima
 
 **`test` (novo):** roda o hook em dry-run no env atual, imprime o que seria escrito sem criar commit. Útil para debug por ferramenta.
 
@@ -92,9 +104,11 @@ $ ai-trailer test
 | Nenhuma var de IA | Hook não modifica o arquivo |
 | `CLAUDE_MODEL` + source=merge | Hook não modifica o arquivo |
 | `CLAUDE_MODEL` + `Co-authored-by` já presente | Não duplica trailer |
-| `CURSOR_TRACE_ID=abc` | `Ai-tool: cursor`, sem `Ai-model` |
+| `CURSOR_TRACE_ID=abc` + `~/.ai-trailer/cursor-model` existe com `claude-3.7-sonnet` | `Ai-tool: cursor`, `Ai-model: claude-3.7-sonnet` |
+| `CURSOR_TRACE_ID=abc` + sem session file | `Ai-tool: cursor`, sem `Ai-model` |
 | `HERMES_SESSION=x` + `HERMES_MODEL=llama-3` | `Ai-tool: hermes`, `Ai-model: llama-3` |
 | Duas vars presentes (`CLAUDE_MODEL` + `HERMES_SESSION`) | Prioridade da ordem da tabela (Claude vence) |
+| `CURSOR_TRACE_ID` + session file com conteúdo vazio | sem `Ai-model` |
 
 ---
 
@@ -110,7 +124,7 @@ $ ai-trailer test
 
 ## O que este spec não cobre
 
-- Codex: vars exatas a serem validadas empiricamente com `ai-trailer test`
-- Cursor: `CURSOR_TRACE_ID` a confirmar (env herdado pelo subprocesso git?)
+- Codex: o PreToolUse hook de model dump precisa ser validado empiricamente com `ai-trailer test` após install
+- Cursor: verificar se Cursor suporta PreToolUse hooks e qual o formato do payload
 - `record` command: mantido sem alteração para histórico local de commits
 - Webhook: mantido sem alteração
