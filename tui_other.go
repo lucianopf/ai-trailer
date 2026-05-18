@@ -64,7 +64,7 @@ func showInteractiveMenu(items []menuItem) []menuItem {
 		key := buf[0]
 
 		switch {
-		case key == 13: // Enter
+		case key == 13 || key == 10: // Enter (CR in raw mode, LF when icrnl is active)
 			clearScreen()
 			return items
 		case key == 'q' || key == 'Q':
