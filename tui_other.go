@@ -20,8 +20,10 @@ func showInteractiveMenu(items []menuItem) []menuItem {
 		return showTextMenu(items)
 	}
 
-	// Set terminal to raw mode using stty
-	rawMode := exec.Command("stty", "raw", "-echo")
+	// Disable canonical mode (char-by-char reads) while keeping output processing
+	// intact so \n → \r\n still works. "stty raw" disables opost which breaks
+	// column alignment; "-icanon min 1" achieves the same read behaviour without it.
+	rawMode := exec.Command("stty", "-icanon", "min", "1", "-echo")
 	rawMode.Stdin = os.Stdin
 	if err := rawMode.Run(); err != nil {
 		return showTextMenu(items)
