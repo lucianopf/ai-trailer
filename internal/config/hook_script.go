@@ -6,7 +6,7 @@ package config
 const HookScript = `#!/usr/bin/env bash
 # prepare-commit-msg — AI Tool Git Trailer Hook
 # Installed by: ai-trailer CLI
-set -uo pipefail
+set -uo pipefail  # -e intentionally omitted: hook must never block a commit
 
 COMMIT_MSG_FILE="$1"
 COMMIT_SOURCE="${2:-}"
@@ -15,6 +15,7 @@ case "$COMMIT_SOURCE" in merge|squash) exit 0 ;; esac
 
 TOOL=""
 MODEL=""
+COAUTHOR=""
 
 # ── Env var detection (tools with guaranteed model in subprocess) ──────
 if [ -n "${CLAUDE_MODEL:-}" ]; then
@@ -33,14 +34,14 @@ elif [ -n "${CURSOR_TRACE_ID:-}" ]; then
     TOOL="cursor"
     _sf="$HOME/.ai-trailer/cursor-model"
     if [ -f "$_sf" ]; then
-        MODEL=$(cat "$_sf" | tr -d '[:space:]')
+        MODEL=$(tr -d '[:space:]' < "$_sf")
     fi
 else
     # ── Session file fallback for Codex (file newer than 60 min = active) ──
     _sf="$HOME/.ai-trailer/codex-model"
     if [ -n "$(find "$_sf" -mmin -60 -type f 2>/dev/null)" ]; then
         TOOL="codex"
-        MODEL=$(cat "$_sf" | tr -d '[:space:]')
+        MODEL=$(tr -d '[:space:]' < "$_sf")
     fi
 fi
 
