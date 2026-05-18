@@ -1,4 +1,5 @@
 VERSION := $(shell grep 'var Version' main.go | sed 's/.*"\(.*\)"/\1/')
+GO_SOURCES := $(shell find . -name '*.go' -not -path './dist/*')
 
 PLATFORMS := \
 	darwin/arm64 \
@@ -13,13 +14,13 @@ BINARIES := $(foreach p,$(PLATFORMS),dist/ai-trailer-$(subst /,-,$(p))$(if $(fin
 
 build: $(BINARIES)
 
-dist/ai-trailer-%:
+dist/ai-trailer-%: $(GO_SOURCES)
 	$(eval PARTS := $(subst -, ,$*))
 	$(eval GOOS  := $(word 1,$(PARTS)))
 	$(eval GOARCH := $(if $(findstring exe,$*),amd64,$(word 2,$(PARTS))))
 	GOOS=$(GOOS) GOARCH=$(GOARCH) go build -ldflags="-s -w" -o $@ .
 
-dist/ai-trailer-windows-amd64.exe:
+dist/ai-trailer-windows-amd64.exe: $(GO_SOURCES)
 	GOOS=windows GOARCH=amd64 go build -ldflags="-s -w" -o $@ .
 
 test:
