@@ -243,7 +243,7 @@ func TestCursorTraceIdWithEmptySessionFile(t *testing.T) {
 	assertNotContains(t, string(msg), "Ai-model:")
 }
 
-func TestOpenCodeRunIdWithSessionDB(t *testing.T) {
+func TestOpenCodeRecentDBDetectsToolAndModel(t *testing.T) {
 	if _, err := exec.LookPath("sqlite3"); err != nil {
 		t.Skip("sqlite3 not available")
 	}
@@ -256,7 +256,7 @@ func TestOpenCodeRunIdWithSessionDB(t *testing.T) {
 	}
 	dbPath := filepath.Join(dbDir, "opencode.db")
 
-	// Create a minimal session table and insert one row
+	// Create DB — the file's mtime is "now", satisfying the -mmin -10 check
 	setup := exec.Command("sqlite3", dbPath,
 		`CREATE TABLE session (id TEXT, model TEXT, time_updated INTEGER);`+
 			`INSERT INTO session VALUES ('s1', '{"id":"kimi-k2.6","providerID":"opencode-go"}', 1);`)
@@ -277,7 +277,7 @@ func TestOpenCodeRunIdWithSessionDB(t *testing.T) {
 	cmd.Env = []string{
 		"PATH=" + os.Getenv("PATH"),
 		"HOME=" + homeDir,
-		"OPENCODE_RUN_ID=abc123",
+		// No OPENCODE_RUN_ID — detection is purely by DB mtime
 	}
 	if out, err := cmd.CombinedOutput(); err != nil {
 		t.Fatalf("hook failed: %v\n%s", err, out)
