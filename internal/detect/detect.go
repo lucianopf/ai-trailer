@@ -172,7 +172,7 @@ var Tools = []Tool{
 		NativeTrailer: false,
 		Binaries:      []string{"windsurf"},
 		ConfigPaths:   []string{"~/.windsurf", "~/.codeium"},
-		EnvMarkers:    []string{},
+		EnvMarkers:    []string{"WINDSURF_EXTENSION_VERSION"},
 		ProcNames:     []string{"windsurf", "codeium"},
 	},
 

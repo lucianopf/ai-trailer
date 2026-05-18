@@ -27,6 +27,9 @@ elif [ -n "${HERMES_SESSION:-}" ]; then
 elif [ -n "${GEMINI_MODEL:-}" ]; then
     TOOL="gemini-cli"
     MODEL="$GEMINI_MODEL"
+elif [ -n "${WINDSURF_EXTENSION_VERSION:-}" ]; then
+    TOOL="windsurf"
+    MODEL=""
 elif [ -n "${CURSOR_TRACE_ID:-}" ]; then
     TOOL="cursor"
     _sf="$HOME/.ai-trailer/cursor-model"
@@ -92,6 +95,7 @@ case "$TOOL" in
     hermes)         COAUTHOR="Co-authored-by: Hermes Agent <noreply@nousresearch.com>" ;;
     opencode)       COAUTHOR="Co-authored-by: OpenCode <noreply@opencode.ai>" ;;
     gemini-cli)     COAUTHOR="Co-authored-by: Gemini <noreply@google.com>" ;;
+    windsurf)       COAUTHOR="Co-authored-by: Windsurf <noreply@codeium.com>" ;;
     cursor)         COAUTHOR="Co-authored-by: Cursor <noreply@cursor.sh>" ;;
     codex)          COAUTHOR="Co-authored-by: OpenAI Codex <noreply@openai.com>" ;;
     github-copilot) COAUTHOR="Co-authored-by: GitHub Copilot <noreply@github.com>" ;;

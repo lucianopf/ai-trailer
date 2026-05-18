@@ -117,6 +117,17 @@ func TestHermesSessionWithModel(t *testing.T) {
 	assertContains(t, msg, "Ai-model: llama-3")
 }
 
+func TestWindsurfEnvAppendsTrailers(t *testing.T) {
+	msg := runHook(t, "subject\n", "", map[string]string{
+		"WINDSURF_EXTENSION_VERSION": "1.0.0",
+	})
+
+	assertContains(t, msg, "Co-authored-by: Windsurf <noreply@codeium.com>")
+	assertContains(t, msg, "Ai-tool: windsurf")
+	assertNotContains(t, msg, "Ai-model:") // no model exposed via env var
+	assertContains(t, msg, "Ai-os:")
+}
+
 func TestClaudeWinsOverHermesWhenBothPresent(t *testing.T) {
 	msg := runHook(t, "subject\n", "", map[string]string{
 		"CLAUDE_MODEL":   "claude-sonnet-4-6",
