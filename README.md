@@ -248,3 +248,5 @@ Linha adicionada pelo Copilot em 2026-05-18T11:51:48-03:00
 Linha adicionada pelo Copilot em 2026-05-18T12:00:06-03:00
 
 Linha adicionada pelo Copilot em 2026-05-18T12:10:33-03:00
+
+Linha adicionada pelo OpenCode em 2026-05-18T12:14:00-03:00
