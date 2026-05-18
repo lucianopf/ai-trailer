@@ -1,0 +1,19 @@
+README.md
+  s_f6b57cef1f58e5::t_6c96ab7caa5301 255
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.8",
+  "base_commit_sha": "d0c90707d63dc33e880e1a01d8b83c29137cf0ee",
+  "prompts": {},
+  "sessions": {
+    "s_f6b57cef1f58e5": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_1c452c514ffeGrHFzRM3sYuT5S",
+        "model": "kimi-k2.6"
+      },
+      "human_author": "lucianopf <lucianopf@outlook.com>"
+    }
+  }
+}
