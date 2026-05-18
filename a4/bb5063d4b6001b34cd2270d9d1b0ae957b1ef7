@@ -1,0 +1,22 @@
+internal/config/hook_script.go
+  s_19a8b192de08c4::t_8d754dc94085eb 18
+  s_19a8b192de08c4::t_830f544c9beff8 9
+  s_19a8b192de08c4::t_76c9f7dd9360e4 37
+  s_19a8b192de08c4::t_77c900c9c0f52a 44
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.8",
+  "base_commit_sha": "a4bb5063d4b6001b34cd2270d9d1b0ae957b1ef7",
+  "prompts": {},
+  "sessions": {
+    "s_19a8b192de08c4": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "2938bb0e-c24b-4c58-a8ac-bff04f59bd42",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": "lucianopf <lucianopf@outlook.com>"
+    }
+  }
+}
