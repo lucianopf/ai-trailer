@@ -150,9 +150,6 @@ func renderMenu(items []menuItem, cursor int, help string) {
 		if item.IsNative {
 			display += " (native)"
 		}
-		if item.HasInstrument {
-			display += " 🔧"
-		}
 		fmt.Print(padRight(display, 36))
 		if item.Detected {
 			fmt.Print(" \033[32m● detected\033[0m")

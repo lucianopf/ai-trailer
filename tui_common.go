@@ -11,13 +11,12 @@ import (
 
 // menuItem represents a selectable tool in the interactive menu.
 type menuItem struct {
-	ToolName      string
-	ToolID        string
-	Trailer       string
-	Selected      bool
-	Detected      bool // Was auto-detected (pre-selected)
-	IsNative      bool // Has native trailer support
-	HasInstrument bool // Has well-known temp file for model tracking
+	ToolName string
+	ToolID   string
+	Trailer  string
+	Selected bool
+	Detected bool // Was auto-detected (pre-selected)
+	IsNative bool // Has native trailer support
 }
 
 // showTextMenu is the plain-text fallback used when:

@@ -29,6 +29,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"time"
 
 	"github.com/lucianopf/ai-trailer/internal/config"
 	"github.com/lucianopf/ai-trailer/internal/detect"
@@ -68,6 +69,8 @@ func main() {
 		cmdVersion(args)
 	case "update":
 		cmdUpdate(args)
+	case "test":
+		cmdTest(args)
 	case "help", "-h", "--help":
 		printUsage()
 	default:
@@ -84,8 +87,9 @@ func printUsage() {
 
 Commands:
   detect              Detect installed AI coding tools
-  configure           Interactive wizard — select tools, install hooks + model tracking
+  configure           Interactive wizard — select tools, install git hook
   configure --instructions, -i  Also inject into CLAUDE.md, AGENTS.md, etc.
+  test                Dry-run: show what trailers would be written right now
   status              Show current configuration status
   record              Query AI tool usage records and statistics
   uninstall           Remove hook only (keep instruction files)
@@ -97,16 +101,17 @@ Commands:
 Examples:
   ai-trailer detect                    # What AI tools are installed?
   ai-trailer configure                 # Interactive menu — SPACE to select, ENTER to confirm
-  ai-trailer configure --instructions  # Hook + inject instruction files
+  ai-trailer test                      # Is the hook working in this session?
   ai-trailer status                    # See what's configured
   ai-trailer record                    # View usage statistics
-  ai-trailer uninstall                 # Remove everything
 
-Model tracking (automatic via configure):
-  Claude Code / KiloCode → /tmp/claude-current-model (status line)
-  Codex                   → /tmp/codex-current-model (PreToolUse hook)
-  Hermes                  → ~/.hermes/sessions/session_*.json (native)
-  OpenCode                → /tmp/opencode-current-model (session plugin)
+Model detection (automatic, no setup for most tools):
+  Claude Code → CLAUDE_MODEL env var (inherited by git subprocess)
+  Hermes      → HERMES_SESSION + HERMES_MODEL env vars
+  OpenCode    → OPENCODE_MODEL env var
+  Gemini CLI  → GEMINI_MODEL env var
+  Codex       → ~/.ai-trailer/codex-model (written by PreToolUse hook)
+  Cursor      → CURSOR_TRACE_ID env var + ~/.ai-trailer/cursor-model
 
 For more: https://github.com/lucianopf/ai-trailer`)
 }
@@ -165,13 +170,12 @@ func cmdConfigure(args []string) {
 	var menuItems []menuItem
 	for _, r := range results {
 		menuItems = append(menuItems, menuItem{
-			ToolName:      r.Tool.Name,
-			ToolID:        r.Tool.ID,
-			Trailer:       r.Tool.Trailer,
-			Selected:      r.Found,
-			Detected:      r.Found,
-			IsNative:      r.Tool.NativeTrailer,
-			HasInstrument: r.Tool.InstrumentTempFile != "",
+			ToolName: r.Tool.Name,
+			ToolID:   r.Tool.ID,
+			Trailer:  r.Tool.Trailer,
+			Selected: r.Found,
+			Detected: r.Found,
+			IsNative: r.Tool.NativeTrailer,
 		})
 	}
 
@@ -223,34 +227,21 @@ func cmdConfigure(args []string) {
 		fmt.Println("  ✓ Git hook updated.")
 	}
 
-	// ── Per-tool instrumentation ──
-	fmt.Println("\n🔧 Setting up model tracking...")
+	// ── Session file hooks for tools without guaranteed env vars ──
+	fmt.Println("\n🔧 Setting up session file hooks...")
 	for _, r := range selected {
-		if r.Tool.InstrumentTempFile == "" {
-			fmt.Printf("  ℹ  %s: model from config file (no runtime instrumentation)\n", r.Tool.Name)
-			continue
-		}
 		switch r.Tool.ID {
-		case "claude-code", "kilocode":
-			if err := installClaudeStatusLine(); err != nil {
-				fmt.Printf("  ✗ %s: %v\n", r.Tool.Name, err)
-			} else {
-				fmt.Printf("  ✓ %s: status line → /tmp/claude-current-model\n", r.Tool.Name)
-			}
 		case "codex":
 			if err := installCodexHooks(); err != nil {
-				fmt.Printf("  ✗ %s: %v\n", r.Tool.Name, err)
+				fmt.Printf("  ✗ Codex: %v\n", err)
 			} else {
-				fmt.Printf("  ✓ %s: PreToolUse hook → /tmp/codex-current-model\n", r.Tool.Name)
+				fmt.Printf("  ✓ Codex: PreToolUse hook → ~/.ai-trailer/codex-model\n")
+				fmt.Printf("     Note: run /hooks in Codex and trust the hook to activate.\n")
 			}
-		case "hermes":
-			fmt.Println("  ✓ Hermes: session JSON natively tracked. No setup needed.")
-		case "opencode":
-			if err := installOpenCodePlugin(); err != nil {
-				fmt.Printf("  ✗ %s: %v\n", r.Tool.Name, err)
-			} else {
-				fmt.Printf("  ✓ %s: session plugin → /tmp/opencode-current-model\n", r.Tool.Name)
-			}
+		case "cursor":
+			installCursorHooks()
+		default:
+			// Other tools detected via env vars — no extra setup needed
 		}
 	}
 
@@ -583,4 +574,67 @@ func cmdUpdate(args []string) {
 	}
 }
 
-// ── version command ─────────────────────────────────────────────────
+// ── test command ────────────────────────────────────────────────────
+
+func cmdTest(_ []string) {
+	fmt.Println("\n🧪 ai-trailer test — dry run (current env)")
+	fmt.Println(strings.Repeat("─", 55))
+
+	type detection struct {
+		tool    string
+		model   string
+		trigger string
+	}
+
+	home, _ := os.UserHomeDir()
+	var det *detection
+
+	if m := os.Getenv("CLAUDE_MODEL"); m != "" {
+		det = &detection{tool: "claude-code", model: m, trigger: "CLAUDE_MODEL=" + m}
+	} else if s := os.Getenv("HERMES_SESSION"); s != "" {
+		m := os.Getenv("HERMES_MODEL")
+		det = &detection{tool: "hermes", model: m, trigger: "HERMES_SESSION=" + s}
+	} else if m := os.Getenv("OPENCODE_MODEL"); m != "" {
+		det = &detection{tool: "opencode", model: m, trigger: "OPENCODE_MODEL=" + m}
+	} else if m := os.Getenv("GEMINI_MODEL"); m != "" {
+		det = &detection{tool: "gemini-cli", model: m, trigger: "GEMINI_MODEL=" + m}
+	} else if t := os.Getenv("CURSOR_TRACE_ID"); t != "" {
+		sf := filepath.Join(home, ".ai-trailer", "cursor-model")
+		m := ""
+		if data, err := os.ReadFile(sf); err == nil {
+			m = strings.TrimSpace(string(data))
+		}
+		det = &detection{tool: "cursor", model: m, trigger: "CURSOR_TRACE_ID=" + t}
+	} else {
+		sf := filepath.Join(home, ".ai-trailer", "codex-model")
+		if fi, err := os.Stat(sf); err == nil && time.Since(fi.ModTime()) < time.Hour {
+			data, _ := os.ReadFile(sf)
+			m := strings.TrimSpace(string(data))
+			det = &detection{tool: "codex", model: m, trigger: "~/.ai-trailer/codex-model (recent)"}
+		}
+	}
+
+	if det == nil {
+		fmt.Println("  No AI tool detected in current environment.")
+		fmt.Println("  Run this command inside an active AI tool session.")
+		return
+	}
+
+	trailerMap := map[string]string{
+		"claude-code": "Co-authored-by: Claude <noreply@anthropic.com>",
+		"hermes":      "Co-authored-by: Hermes Agent <noreply@nousresearch.com>",
+		"opencode":    "Co-authored-by: OpenCode <noreply@opencode.ai>",
+		"gemini-cli":  "Co-authored-by: Gemini <noreply@google.com>",
+		"cursor":      "Co-authored-by: Cursor <noreply@cursor.sh>",
+		"codex":       "Co-authored-by: OpenAI Codex <noreply@openai.com>",
+	}
+
+	fmt.Printf("  Env detected:  %s\n", det.trigger)
+	fmt.Println("\n  Would append:")
+	fmt.Printf("    %s\n", trailerMap[det.tool])
+	fmt.Printf("    Ai-tool: %s\n", det.tool)
+	if det.model != "" {
+		fmt.Printf("    Ai-model: %s\n", det.model)
+	}
+	fmt.Printf("    Ai-os: %s\n", config.Platform())
+}
