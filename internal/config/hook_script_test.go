@@ -177,7 +177,7 @@ func TestHermesModelFromSessionFileWinsOverConfig(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(hermesDir, "config.yaml"), []byte(configYaml), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	sessionJSON := `{"session_id":"mysession","model":"gpt-5"}`
+	sessionJSON := `{"session_id": "mysession", "model": "gpt-5"}`
 	if err := os.WriteFile(filepath.Join(sessionsDir, "session_mysession.json"), []byte(sessionJSON), 0o644); err != nil {
 		t.Fatal(err)
 	}

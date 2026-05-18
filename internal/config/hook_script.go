@@ -29,7 +29,7 @@ elif [ -n "${HERMES_SESSION_ID:-}${HERMES_HOME:-}${_HERMES_GATEWAY:-}" ]; then
         # Session file reflects runtime model changes (e.g. /model switch mid-session)
         _hsess="$_hdir/sessions/session_${HERMES_SESSION_ID:-}.json"
         if [ -f "$_hsess" ]; then
-            MODEL=$(grep -o '"model":"[^"]*"' "$_hsess" 2>/dev/null | head -1 | sed 's/"model":"\([^"]*\)"/\1/')
+            MODEL=$(grep -o '"model": *"[^"]*"' "$_hsess" 2>/dev/null | head -1 | sed 's/"model": *"\([^"]*\)"/\1/')
         fi
         # Fall back to config.yaml model.default
         if [ -z "$MODEL" ] && [ -f "$_hdir/config.yaml" ]; then
