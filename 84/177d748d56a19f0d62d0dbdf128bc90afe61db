@@ -1,0 +1,19 @@
+README.md
+  s_5fa1c13fdd53fc::t_de2cecf8e6ab56 6
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.8",
+  "base_commit_sha": "84177d748d56a19f0d62d0dbdf128bc90afe61db",
+  "prompts": {},
+  "sessions": {
+    "s_5fa1c13fdd53fc": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019e3b61-fcc5-7891-a565-cb933c9ae9b3",
+        "model": "gpt-5.5"
+      },
+      "human_author": "lucianopf <lucianopf@outlook.com>"
+    }
+  }
+}
