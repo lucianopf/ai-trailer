@@ -639,5 +639,9 @@ func cmdTest(_ []string) {
 	if det.model != "" {
 		fmt.Printf("    Ai-model: %s\n", det.model)
 	}
-	fmt.Printf("    Ai-os: %s\n", config.Platform())
+	aiOs := runtime.GOOS
+	if aiOs == "darwin" {
+		aiOs = "macos"
+	}
+	fmt.Printf("    Ai-os: %s\n", aiOs)
 }
