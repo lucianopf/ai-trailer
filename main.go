@@ -38,10 +38,10 @@ import (
 )
 
 // Version is set at build time via -ldflags, or defaults to this constant.
-var Version = "v0.6.4"
+var Version = "v0.6.7"
 
-// RepoURL is the base URL for downloading binaries from the public repo.
-const RepoURL = "https://raw.githubusercontent.com/lucianopf/ai-trailer/master"
+// RepoURL is the base URL for downloading binaries from GitHub Releases.
+const RepoURL = "https://github.com/lucianopf/ai-trailer/releases/latest/download"
 
 func main() {
 	if len(os.Args) < 2 {
@@ -464,7 +464,7 @@ func cmdUpdate(args []string) {
 		binaryName += ".exe"
 	}
 
-	downloadURL := fmt.Sprintf("%s/dist/%s", RepoURL, binaryName)
+	downloadURL := fmt.Sprintf("%s/%s", RepoURL, binaryName)
 	fmt.Printf("  Downloading: %s\n", downloadURL)
 
 	// Download to temp file
