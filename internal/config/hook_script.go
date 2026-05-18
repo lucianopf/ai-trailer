@@ -51,10 +51,20 @@ elif [ -n "${CURSOR_TRACE_ID:-}" ]; then
 else
     # ── Codex: detect from its native Co-authored-by trailer ──────────
     # Codex CLI injects "Co-authored-by: Codex <model>" before the hook runs.
+    # The trailer model string (e.g. "GPT-5 high") is imprecise; override with
+    # the exact model from ~/.codex/state_5.sqlite threads table when available.
     _codex_line=$(grep -i "Co-authored-by: Codex <" "$COMMIT_MSG_FILE" 2>/dev/null | head -1)
     if [ -n "$_codex_line" ]; then
         TOOL="codex"
         MODEL=$(echo "$_codex_line" | sed 's/.*<\([^>]*\)>/\1/')
+        if pgrep -q "codex" 2>/dev/null \
+           && command -v sqlite3 &>/dev/null \
+           && [ -f "$HOME/.codex/state_5.sqlite" ]; then
+            _cx_model=$(sqlite3 "$HOME/.codex/state_5.sqlite" \
+                "SELECT model FROM threads ORDER BY updated_at DESC LIMIT 1;" \
+                2>/dev/null)
+            [ -n "$_cx_model" ] && MODEL="$_cx_model"
+        fi
     # ── Copilot: detect from its native Co-authored-by trailer ────────
     # GitHub Copilot CLI injects "Co-authored-by: Copilot <...>" before the hook.
     # Model is read from VS Code's state DB (sqlite3): the key

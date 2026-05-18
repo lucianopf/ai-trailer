@@ -248,6 +248,63 @@ func TestCodexNativeTrailerDetectsToolAndModel(t *testing.T) {
 	}
 }
 
+func TestCodexModelOverriddenFromStateDB(t *testing.T) {
+	if _, err := exec.LookPath("sqlite3"); err != nil {
+		t.Skip("sqlite3 not available")
+	}
+
+	dir := t.TempDir()
+	homeDir := filepath.Join(dir, "home")
+	codexDir := filepath.Join(homeDir, ".codex")
+	if err := os.MkdirAll(codexDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	dbPath := filepath.Join(codexDir, "state_5.sqlite")
+	setup := exec.Command("sqlite3", dbPath,
+		`CREATE TABLE threads (id TEXT, model TEXT, updated_at INTEGER);`+
+			`INSERT INTO threads VALUES ('t1', 'gpt-5.5', 1);`)
+	if out, err := setup.CombinedOutput(); err != nil {
+		t.Fatalf("sqlite3 setup: %v\n%s", err, out)
+	}
+
+	// Fake pgrep that reports codex as running
+	fakeBin := filepath.Join(dir, "bin")
+	if err := os.MkdirAll(fakeBin, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(fakeBin, "pgrep"), []byte("#!/bin/bash\nexit 0\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	hookPath := filepath.Join(dir, "prepare-commit-msg")
+	if err := os.WriteFile(hookPath, []byte(HookScript), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	initial := "docs: test\n\nCo-authored-by: Codex <GPT-5 high>\n"
+	msgPath := filepath.Join(dir, "COMMIT_EDITMSG")
+	if err := os.WriteFile(msgPath, []byte(initial), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	cmd := exec.Command("bash", hookPath, msgPath)
+	cmd.Env = []string{
+		"PATH=" + fakeBin + ":" + os.Getenv("PATH"),
+		"HOME=" + homeDir,
+	}
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("hook failed: %v\n%s", err, out)
+	}
+
+	msg, err := os.ReadFile(msgPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	assertContains(t, string(msg), "Ai-tool: codex")
+	// DB model (gpt-5.5) overrides imprecise trailer model (GPT-5 high)
+	assertContains(t, string(msg), "Ai-model: gpt-5.5")
+	assertNotContains(t, string(msg), "Ai-model: GPT-5 high")
+}
+
 func TestCopilotNativeTrailerDetectsTool(t *testing.T) {
 	// GitHub Copilot CLI injects "Co-authored-by: Copilot <...>" before the hook runs.
 	initial := "docs: update README\n\nCo-authored-by: Copilot <223556219+Copilot@users.noreply.github.com>\n"
