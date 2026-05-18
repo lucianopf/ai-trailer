@@ -1,0 +1,22 @@
+docs/2026-05-18-env-var-hook-redesign.md
+  s_19a8b192de08c4::t_8664dd8858488f 31-41,43-47,49-52,64,66,70,74-77
+  s_19a8b192de08c4::t_d9a81ec8e1cad1 17,19-21
+  s_19a8b192de08c4::t_2072c4912ea273 127-128
+  s_19a8b192de08c4::t_efbd21005cef05 107-108,111
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.8",
+  "base_commit_sha": "f6029cb7ad0c3598634f20ddb4608384aedba53a",
+  "prompts": {},
+  "sessions": {
+    "s_19a8b192de08c4": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "2938bb0e-c24b-4c58-a8ac-bff04f59bd42",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": "lucianopf <lucianopf@outlook.com>"
+    }
+  }
+}
