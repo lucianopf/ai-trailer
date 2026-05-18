@@ -24,9 +24,18 @@ if [ -n "${CLAUDE_MODEL:-}" ]; then
 elif [ -n "${HERMES_SESSION:-}" ]; then
     TOOL="hermes"
     MODEL="${HERMES_MODEL:-}"
-elif [ -n "${OPENCODE_MODEL:-}" ]; then
+elif [ -n "${OPENCODE_RUN_ID:-}" ]; then
     TOOL="opencode"
-    MODEL="$OPENCODE_MODEL"
+    # Read the model from the most recent OpenCode session DB entry
+    _oc_db="$HOME/.local/share/opencode/opencode.db"
+    if [ -f "$_oc_db" ] && command -v sqlite3 &>/dev/null; then
+        _oc_model_json=$(sqlite3 "$_oc_db" \
+            "SELECT model FROM session ORDER BY time_updated DESC LIMIT 1;" \
+            2>/dev/null)
+        if [ -n "$_oc_model_json" ]; then
+            MODEL=$(echo "$_oc_model_json" | sed 's/.*"id":"\([^"]*\)".*/\1/')
+        fi
+    fi
 elif [ -n "${GEMINI_MODEL:-}" ]; then
     TOOL="gemini-cli"
     MODEL="$GEMINI_MODEL"

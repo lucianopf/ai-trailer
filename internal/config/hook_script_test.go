@@ -243,6 +243,54 @@ func TestCursorTraceIdWithEmptySessionFile(t *testing.T) {
 	assertNotContains(t, string(msg), "Ai-model:")
 }
 
+func TestOpenCodeRunIdWithSessionDB(t *testing.T) {
+	if _, err := exec.LookPath("sqlite3"); err != nil {
+		t.Skip("sqlite3 not available")
+	}
+
+	dir := t.TempDir()
+	homeDir := filepath.Join(dir, "home")
+	dbDir := filepath.Join(homeDir, ".local", "share", "opencode")
+	if err := os.MkdirAll(dbDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	dbPath := filepath.Join(dbDir, "opencode.db")
+
+	// Create a minimal session table and insert one row
+	setup := exec.Command("sqlite3", dbPath,
+		`CREATE TABLE session (id TEXT, model TEXT, time_updated INTEGER);`+
+			`INSERT INTO session VALUES ('s1', '{"id":"kimi-k2.6","providerID":"opencode-go"}', 1);`)
+	if out, err := setup.CombinedOutput(); err != nil {
+		t.Fatalf("sqlite3 setup failed: %v\n%s", err, out)
+	}
+
+	hookPath := filepath.Join(dir, "prepare-commit-msg")
+	if err := os.WriteFile(hookPath, []byte(HookScript), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	msgPath := filepath.Join(dir, "COMMIT_EDITMSG")
+	if err := os.WriteFile(msgPath, []byte("subject\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	cmd := exec.Command("bash", hookPath, msgPath)
+	cmd.Env = []string{
+		"PATH=" + os.Getenv("PATH"),
+		"HOME=" + homeDir,
+		"OPENCODE_RUN_ID=abc123",
+	}
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("hook failed: %v\n%s", err, out)
+	}
+
+	msg, err := os.ReadFile(msgPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	assertContains(t, string(msg), "Ai-tool: opencode")
+	assertContains(t, string(msg), "Ai-model: kimi-k2.6")
+}
+
 func assertContains(t *testing.T, s, substr string) {
 	t.Helper()
 	if !strings.Contains(strings.ToLower(s), strings.ToLower(substr)) {
