@@ -38,7 +38,7 @@ import (
 )
 
 // Version is set at build time via -ldflags, or defaults to this constant.
-var Version = "v0.5.1"
+var Version = "v0.6.4"
 
 // RepoURL is the base URL for downloading binaries from the public repo.
 const RepoURL = "https://raw.githubusercontent.com/lucianopf/ai-trailer/master"
