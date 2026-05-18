@@ -144,6 +144,20 @@ func TestCodexNativeTrailerDetectsToolAndModel(t *testing.T) {
 	}
 }
 
+func TestCopilotNativeTrailerDetectsTool(t *testing.T) {
+	// GitHub Copilot CLI injects "Co-authored-by: Copilot <...>" before the hook runs.
+	initial := "docs: update README\n\nCo-authored-by: Copilot <223556219+Copilot@users.noreply.github.com>\n"
+	msg := runHook(t, initial, "", map[string]string{})
+
+	assertContains(t, msg, "Ai-tool: github-copilot")
+	assertNotContains(t, msg, "Ai-model:") // Copilot doesn't expose model in trailer
+	// Must NOT duplicate the Co-authored-by line
+	count := strings.Count(strings.ToLower(msg), "co-authored-by:")
+	if count != 1 {
+		t.Fatalf("expected 1 Co-authored-by line, got %d:\n%s", count, msg)
+	}
+}
+
 func TestCursorTraceIdWithSessionFile(t *testing.T) {
 	dir := t.TempDir()
 	homeDir := filepath.Join(dir, "home")

@@ -43,6 +43,10 @@ else
     if [ -n "$_codex_line" ]; then
         TOOL="codex"
         MODEL=$(echo "$_codex_line" | sed 's/.*<\([^>]*\)>/\1/')
+    # ── Copilot: detect from its native Co-authored-by trailer ────────
+    # GitHub Copilot CLI injects "Co-authored-by: Copilot <...>" before the hook.
+    elif grep -qi "Co-authored-by: Copilot <" "$COMMIT_MSG_FILE" 2>/dev/null; then
+        TOOL="github-copilot"
     else
         # ── Session file fallback (for Codex versions without native trailer) ──
         _sf="$HOME/.ai-trailer/codex-model"
@@ -59,13 +63,14 @@ fi
 
 # ── Co-author trailer mapping ──────────────────────────────────────────
 case "$TOOL" in
-    claude-code) COAUTHOR="Co-authored-by: Claude <noreply@anthropic.com>" ;;
-    hermes)      COAUTHOR="Co-authored-by: Hermes Agent <noreply@nousresearch.com>" ;;
-    opencode)    COAUTHOR="Co-authored-by: OpenCode <noreply@opencode.ai>" ;;
-    gemini-cli)  COAUTHOR="Co-authored-by: Gemini <noreply@google.com>" ;;
-    cursor)      COAUTHOR="Co-authored-by: Cursor <noreply@cursor.sh>" ;;
-    codex)       COAUTHOR="Co-authored-by: OpenAI Codex <noreply@openai.com>" ;;
-    *)           exit 0 ;;
+    claude-code)    COAUTHOR="Co-authored-by: Claude <noreply@anthropic.com>" ;;
+    hermes)         COAUTHOR="Co-authored-by: Hermes Agent <noreply@nousresearch.com>" ;;
+    opencode)       COAUTHOR="Co-authored-by: OpenCode <noreply@opencode.ai>" ;;
+    gemini-cli)     COAUTHOR="Co-authored-by: Gemini <noreply@google.com>" ;;
+    cursor)         COAUTHOR="Co-authored-by: Cursor <noreply@cursor.sh>" ;;
+    codex)          COAUTHOR="Co-authored-by: OpenAI Codex <noreply@openai.com>" ;;
+    github-copilot) COAUTHOR="Co-authored-by: GitHub Copilot <noreply@github.com>" ;;
+    *)              exit 0 ;;
 esac
 
 # ── Append trailers (idempotent) ───────────────────────────────────────
