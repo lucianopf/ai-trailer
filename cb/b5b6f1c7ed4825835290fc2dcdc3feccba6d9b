@@ -1,0 +1,21 @@
+main.go
+  s_19a8b192de08c4::t_3685ccb39e0aa6 41
+  s_19a8b192de08c4::t_bd47711557c3c9 43-44
+  s_19a8b192de08c4::t_f62a97f84870fc 467
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.8",
+  "base_commit_sha": "cbb5b6f1c7ed4825835290fc2dcdc3feccba6d9b",
+  "prompts": {},
+  "sessions": {
+    "s_19a8b192de08c4": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "2938bb0e-c24b-4c58-a8ac-bff04f59bd42",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": "lucianopf <lucianopf@outlook.com>"
+    }
+  }
+}
