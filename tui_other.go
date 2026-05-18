@@ -173,7 +173,8 @@ func renderMenu(items []menuItem, cursor int, help string) {
 		}
 		pr("%s", line)
 		if i == cursor {
-			pr("     \033[7m↳ %s\033[0m", truncateStr(item.Trailer, 55))
+			trailerLine := "Ai-tool: " + item.ToolID + "  •  " + item.Trailer
+			pr("     \033[7m↳ %s\033[0m", truncateStr(trailerLine, 72))
 		}
 	}
 	pr("")
