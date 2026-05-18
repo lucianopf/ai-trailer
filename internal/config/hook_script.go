@@ -25,10 +25,15 @@ elif [ -n "${HERMES_SESSION_ID:-}${HERMES_HOME:-}${_HERMES_GATEWAY:-}" ]; then
     TOOL="hermes"
     MODEL="${HERMES_MODEL:-}"
     if [ -z "$MODEL" ]; then
-        # Read model.default from ~/.hermes/config.yaml
-        _hcfg="${HERMES_HOME:-$HOME/.hermes}/config.yaml"
-        if [ -f "$_hcfg" ]; then
-            MODEL=$(awk '/^model:/{f=1} f && /^[[:space:]]+default:/{print $2; exit}' "$_hcfg" 2>/dev/null)
+        _hdir="${HERMES_HOME:-$HOME/.hermes}"
+        # Session file reflects runtime model changes (e.g. /model switch mid-session)
+        _hsess="$_hdir/sessions/session_${HERMES_SESSION_ID:-}.json"
+        if [ -f "$_hsess" ]; then
+            MODEL=$(grep -o '"model":"[^"]*"' "$_hsess" 2>/dev/null | head -1 | sed 's/"model":"\([^"]*\)"/\1/')
+        fi
+        # Fall back to config.yaml model.default
+        if [ -z "$MODEL" ] && [ -f "$_hdir/config.yaml" ]; then
+            MODEL=$(awk '/^model:/{f=1} f && /^[[:space:]]+default:/{print $2; exit}' "$_hdir/config.yaml" 2>/dev/null)
         fi
     fi
 elif [ -n "${GEMINI_MODEL:-}" ]; then

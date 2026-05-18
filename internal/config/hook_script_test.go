@@ -164,6 +164,52 @@ func TestHermesModelFromConfigYaml(t *testing.T) {
 	assertContains(t, string(msg), "Ai-model: gemini-3.1-pro")
 }
 
+func TestHermesModelFromSessionFileWinsOverConfig(t *testing.T) {
+	dir := t.TempDir()
+	homeDir := filepath.Join(dir, "home")
+	hermesDir := filepath.Join(homeDir, ".hermes")
+	sessionsDir := filepath.Join(hermesDir, "sessions")
+	if err := os.MkdirAll(sessionsDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	// Config says gemini but session has gpt-5 (user switched mid-session)
+	configYaml := "model:\n  default: gemini-3.1-pro\n"
+	if err := os.WriteFile(filepath.Join(hermesDir, "config.yaml"), []byte(configYaml), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	sessionJSON := `{"session_id":"mysession","model":"gpt-5"}`
+	if err := os.WriteFile(filepath.Join(sessionsDir, "session_mysession.json"), []byte(sessionJSON), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	hookPath := filepath.Join(dir, "prepare-commit-msg")
+	if err := os.WriteFile(hookPath, []byte(HookScript), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	msgPath := filepath.Join(dir, "COMMIT_EDITMSG")
+	if err := os.WriteFile(msgPath, []byte("subject\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	cmd := exec.Command("bash", hookPath, msgPath)
+	cmd.Env = []string{
+		"PATH=" + os.Getenv("PATH"),
+		"HOME=" + homeDir,
+		"HERMES_SESSION_ID=mysession",
+	}
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("hook failed: %v\n%s", err, out)
+	}
+
+	msg, err := os.ReadFile(msgPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	assertContains(t, string(msg), "Ai-tool: hermes")
+	assertContains(t, string(msg), "Ai-model: gpt-5")
+	assertNotContains(t, string(msg), "gemini-3.1-pro")
+}
+
 func TestWindsurfEnvAppendsTrailers(t *testing.T) {
 	msg := runHook(t, "subject\n", "", map[string]string{
 		"WINDSURF_EXTENSION_VERSION": "1.0.0",
