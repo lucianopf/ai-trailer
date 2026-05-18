@@ -571,7 +571,14 @@ func cmdUpdate(args []string) {
 	}
 
 	fmt.Println(strings.Repeat("─", 55))
-	fmt.Println("✅ Update complete. New version:", Version)
+	// Ask the newly installed binary for its own version string.
+	newVersion := Version
+	if out, err := exec.Command(currentPath, "version").Output(); err == nil {
+		if fields := strings.Fields(string(out)); len(fields) >= 2 {
+			newVersion = fields[1]
+		}
+	}
+	fmt.Println("✅ Update complete. New version:", newVersion)
 	if !reconfigure {
 		fmt.Println("   Run 'ai-trailer configure' to refresh hooks/files if needed.")
 	}
