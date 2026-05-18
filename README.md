@@ -238,4 +238,4 @@ O hook foi desenhado para não bloquear commits:
 
 O objetivo é enriquecer o histórico de commits sem quebrar o fluxo normal de desenvolvimento.
 
-<!-- test: claude-code model detection via native trailer -->
+<!-- test: claude-code model detection v2 -->
