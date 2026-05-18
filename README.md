@@ -5,6 +5,7 @@
      5|     5|     5|     5|     5|     5|     5|Linha de validação: alteração pequena para validar o fluxo de commit.
      6|     6|     6|     6|     6|     6|     6|Linha de teste: alteração mínima para gerar um novo commit.
      7|     7|     7|     7|     7|     7|     7|Linha de teste adicional: novo commit pequeno no README.
+     8|     8|     8|     8|     8|     8|     8|Linha de teste local: nova mudança para validação.
      7|     7|     7|     7|     7|     7|     7|
      8|     8|     8|     8|     8|     8|     8|O `ai-trailer` instala um `prepare-commit-msg` global do Git que detecta a ferramenta de IA ativa, descobre o modelo quando possível e acrescenta metadados como:
      9|     9|     9|     9|     9|     9|     9|
