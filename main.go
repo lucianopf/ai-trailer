@@ -38,7 +38,7 @@ import (
 )
 
 // Version is set at build time via -ldflags, or defaults to this constant.
-var Version = "v0.6.11"
+var Version = "v0.6.12"
 
 // RepoURL is the base URL for downloading binaries from GitHub Releases.
 const RepoURL = "https://github.com/lucianopf/ai-trailer/releases/latest/download"
@@ -226,6 +226,13 @@ func cmdConfigure(args []string) {
 	} else {
 		config.InstallHook() // re-install to update
 		fmt.Println("  ✓ Git hook updated.")
+	}
+	if localPath := config.LocalHooksPath(); localPath != "" {
+		globalDir, _ := config.HookDir()
+		if localPath != globalDir {
+			fmt.Printf("  ⚠  Local hooksPath override detected: %s\n", localPath)
+			fmt.Printf("     Hook also installed there so it still fires in this repo.\n")
+		}
 	}
 
 	// ── Session file hooks for tools without guaranteed env vars ──

@@ -374,7 +374,19 @@ func IsHookInstalled() bool {
 	return configured == dir
 }
 
+// LocalHooksPath returns the current repo's local core.hooksPath if set, empty otherwise.
+func LocalHooksPath() string {
+	cmd := exec.Command("git", "config", "--local", "core.hooksPath")
+	out, err := cmd.Output()
+	if err != nil {
+		return ""
+	}
+	return strings.TrimSpace(string(out))
+}
+
 // InstallHook writes the git hook script and configures git globally.
+// If the current repo has a local core.hooksPath override that differs from
+// the global one, the hook is also installed there so it still fires.
 func InstallHook() error {
 	hookDir, err := HookDir()
 	if err != nil {
@@ -390,10 +402,18 @@ func InstallHook() error {
 		return fmt.Errorf("cannot write hook script: %w", err)
 	}
 
-	// Set git config
+	// Set git config globally
 	cmd := exec.Command("git", "config", "--global", "core.hooksPath", hookDir)
 	if out, err := cmd.CombinedOutput(); err != nil {
 		return fmt.Errorf("git config failed: %w\nOutput: %s", err, string(out))
+	}
+
+	// If the current repo has a local override pointing elsewhere, install there too
+	if localPath := LocalHooksPath(); localPath != "" && localPath != hookDir {
+		if err := os.MkdirAll(localPath, 0755); err == nil {
+			localHookPath := filepath.Join(localPath, hookFileName)
+			os.WriteFile(localHookPath, []byte(HookScript), 0755) //nolint
+		}
 	}
 
 	return nil
