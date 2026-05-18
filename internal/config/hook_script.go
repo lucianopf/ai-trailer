@@ -24,6 +24,13 @@ if [ -n "${CLAUDE_MODEL:-}" ]; then
 elif [ -n "${HERMES_SESSION_ID:-}${HERMES_HOME:-}${_HERMES_GATEWAY:-}" ]; then
     TOOL="hermes"
     MODEL="${HERMES_MODEL:-}"
+    if [ -z "$MODEL" ]; then
+        # Read model.default from ~/.hermes/config.yaml
+        _hcfg="${HERMES_HOME:-$HOME/.hermes}/config.yaml"
+        if [ -f "$_hcfg" ]; then
+            MODEL=$(awk '/^model:/{f=1} f && /^[[:space:]]+default:/{print $2; exit}' "$_hcfg" 2>/dev/null)
+        fi
+    fi
 elif [ -n "${GEMINI_MODEL:-}" ]; then
     TOOL="gemini-cli"
     MODEL="$GEMINI_MODEL"
