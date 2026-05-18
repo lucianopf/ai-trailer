@@ -1,0 +1,19 @@
+README.md
+  s_59a4b26d9dab9f::t_0bc3c9a3c73895 257-258
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.8",
+  "base_commit_sha": "bef524d07c01f01188e90007dc1a843b166abbfd",
+  "prompts": {},
+  "sessions": {
+    "s_59a4b26d9dab9f": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_1c4338ca1ffeUyfa7X9vqPgQlb",
+        "model": "kimi-k2.6"
+      },
+      "human_author": "lucianopf <lucianopf@outlook.com>"
+    }
+  }
+}
