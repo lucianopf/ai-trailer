@@ -38,7 +38,7 @@ import (
 )
 
 // Version is set at build time via -ldflags, or defaults to this constant.
-var Version = "v0.6.18"
+var Version = "v0.6.19"
 
 // RepoURL is the base URL for downloading binaries from GitHub Releases.
 const RepoURL = "https://github.com/lucianopf/ai-trailer/releases/latest/download"
@@ -235,25 +235,6 @@ func cmdConfigure(args []string) {
 		}
 	}
 
-	// ── Session file hooks for tools without guaranteed env vars ──
-	fmt.Println("\n🔧 Setting up session file hooks...")
-	for _, r := range selected {
-		switch r.Tool.ID {
-		case "codex":
-			if err := installCodexHooks(); err != nil {
-				fmt.Printf("  ✗ Codex: %v\n", err)
-			} else {
-				fmt.Printf("  ✓ Codex: PreToolUse hook → ~/.ai-trailer/codex-model\n")
-				fmt.Printf("     Note: run /hooks in Codex and trust the hook to activate.\n")
-			}
-		case "cursor":
-			if err := installCursorHooks(); err != nil {
-				fmt.Printf("  ✗ Cursor: %v\n", err)
-			}
-		default:
-			// Other tools detected via env vars — no extra setup needed
-		}
-	}
 
 	// ── Instruction files (opt-in) ──
 	var updatedFiles []string
