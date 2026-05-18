@@ -21,7 +21,7 @@ COAUTHOR=""
 if [ -n "${CLAUDE_MODEL:-}" ]; then
     TOOL="claude-code"
     MODEL="$CLAUDE_MODEL"
-elif [ -n "${HERMES_SESSION:-}" ]; then
+elif [ -n "${HERMES_SESSION_ID:-}${HERMES_HOME:-}${_HERMES_GATEWAY:-}" ]; then
     TOOL="hermes"
     MODEL="${HERMES_MODEL:-}"
 elif [ -n "${GEMINI_MODEL:-}" ]; then

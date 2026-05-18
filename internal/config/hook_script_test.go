@@ -108,13 +108,21 @@ func TestClaudeModelWithExistingCoauthor(t *testing.T) {
 
 func TestHermesSessionWithModel(t *testing.T) {
 	msg := runHook(t, "subject\n", "", map[string]string{
-		"HERMES_SESSION": "abc123",
-		"HERMES_MODEL":   "llama-3",
+		"HERMES_SESSION_ID": "abc123",
+		"HERMES_MODEL":      "llama-3",
 	})
 
 	assertContains(t, msg, "Co-authored-by: Hermes Agent <noreply@nousresearch.com>")
 	assertContains(t, msg, "Ai-tool: hermes")
 	assertContains(t, msg, "Ai-model: llama-3")
+}
+
+func TestHermesViaHermesHome(t *testing.T) {
+	msg := runHook(t, "subject\n", "", map[string]string{
+		"HERMES_HOME": "/home/user/.hermes",
+	})
+
+	assertContains(t, msg, "Ai-tool: hermes")
 }
 
 func TestWindsurfEnvAppendsTrailers(t *testing.T) {
@@ -130,9 +138,9 @@ func TestWindsurfEnvAppendsTrailers(t *testing.T) {
 
 func TestClaudeWinsOverHermesWhenBothPresent(t *testing.T) {
 	msg := runHook(t, "subject\n", "", map[string]string{
-		"CLAUDE_MODEL":   "claude-sonnet-4-6",
-		"HERMES_SESSION": "abc123",
-		"HERMES_MODEL":   "llama-3",
+		"CLAUDE_MODEL":      "claude-sonnet-4-6",
+		"HERMES_SESSION_ID": "abc123",
+		"HERMES_MODEL":      "llama-3",
 	})
 
 	assertContains(t, msg, "Ai-tool: claude-code")
