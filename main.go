@@ -239,7 +239,9 @@ func cmdConfigure(args []string) {
 				fmt.Printf("     Note: run /hooks in Codex and trust the hook to activate.\n")
 			}
 		case "cursor":
-			installCursorHooks()
+			if err := installCursorHooks(); err != nil {
+				fmt.Printf("  ✗ Cursor: %v\n", err)
+			}
 		default:
 			// Other tools detected via env vars — no extra setup needed
 		}
