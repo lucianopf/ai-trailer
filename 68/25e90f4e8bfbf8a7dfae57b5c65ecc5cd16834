@@ -1,0 +1,20 @@
+docs/superpowers/plans/2026-05-18-env-var-hook-redesign.md
+  s_19a8b192de08c4::t_e71f0e17033ef6 1-628,630-664,666-904
+  s_19a8b192de08c4::t_31a6a09d202619 629,665
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.8",
+  "base_commit_sha": "6825e90f4e8bfbf8a7dfae57b5c65ecc5cd16834",
+  "prompts": {},
+  "sessions": {
+    "s_19a8b192de08c4": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "2938bb0e-c24b-4c58-a8ac-bff04f59bd42",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": "lucianopf <lucianopf@outlook.com>"
+    }
+  }
+}
