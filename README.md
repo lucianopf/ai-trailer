@@ -242,3 +242,5 @@ O hook foi desenhado para não bloquear commits:
 - só adiciona cada trailer se ele ainda não existir na mensagem.
 
 O objetivo é enriquecer o histórico de commits sem quebrar o fluxo normal de desenvolvimento.
+
+Linha adicionada pelo Copilot em 2026-05-18T11:51:48-03:00
