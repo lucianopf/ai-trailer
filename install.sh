@@ -95,7 +95,9 @@ main() {
     echo -e "${GREEN}  ✓ Installation complete!${NC}"
     echo ""
 
-    "${INSTALL_DIR}/${final_name}" configure
+    # Reconnect stdin to the terminal — when running via `curl | bash` stdin is
+    # the pipe, not the TTY, which prevents the interactive TUI from opening.
+    "${INSTALL_DIR}/${final_name}" configure < /dev/tty
 }
 
 main "$@"
