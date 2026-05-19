@@ -1,0 +1,44 @@
+internal/config/hook_script_test.go
+  s_19a8b192de08c4::t_b186f297165b18 85-98
+  s_19a8b192de08c4::t_97d34d1e2a6f60 71-84
+  s_19a8b192de08c4::t_85a4455d9a5598 336-360,363-364,367-394
+  s_19a8b192de08c4::t_f5c1a1a5d405d1 361-362,365-366
+internal/config/hook_script.go
+  s_19a8b192de08c4::t_bc88cee907f4cc 21-23,25
+  s_19a8b192de08c4::t_444a5d70014979 104
+  s_19a8b192de08c4::t_5e3095366d8afd 114,116-122
+  s_19a8b192de08c4::t_490635ec47a795 71,115
+  s_19a8b192de08c4::t_b3a74ff54038a7 26-34
+tui_linux.go
+  s_19a8b192de08c4::t_c91bade4002c9b 33-34
+main.go
+  s_19a8b192de08c4::t_e411330e41522a 298
+  s_19a8b192de08c4::t_916dda2dbb42ee 630-631,633-639
+  s_19a8b192de08c4::t_4e96dbd067136b 24-25
+  s_19a8b192de08c4::t_106ebe8242655d 43
+  s_19a8b192de08c4::t_d51df553612685 307-311,313-315,317,319-325
+  s_19a8b192de08c4::t_6eab2fc4f1c31e 518,520-521
+  s_19a8b192de08c4::t_547f32436fcd24 282-283,285-297,299-306,312,359,361-362
+  s_19a8b192de08c4::t_bfa3cd380a9598 284,316,318,327-329,332-358,360
+  s_19a8b192de08c4::t_2523b6a69cec85 671,674-681,683,686-687
+  s_19a8b192de08c4::t_0b84745be1c83f 100-101
+  s_19a8b192de08c4::t_3b2dd208ca2399 240
+  s_19a8b192de08c4::t_91157d1c621982 326,330-331
+  s_19a8b192de08c4::t_fd709829ab9076 715,718
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.9",
+  "base_commit_sha": "e0a875f5adc6c4f5c3eaf136bd2d1617f929cb95",
+  "prompts": {},
+  "sessions": {
+    "s_19a8b192de08c4": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "2938bb0e-c24b-4c58-a8ac-bff04f59bd42",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": "lucianopf <lucianopf@outlook.com>"
+    }
+  }
+}
