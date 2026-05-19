@@ -21,6 +21,8 @@
 package main
 
 import (
+	"bufio"
+	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
@@ -38,7 +40,7 @@ import (
 )
 
 // Version is set at build time via -ldflags, or defaults to this constant.
-var Version = "v0.6.20"
+var Version = "v0.6.33"
 
 // RepoURL is the base URL for downloading binaries from GitHub Releases.
 const RepoURL = "https://github.com/lucianopf/ai-trailer/releases/latest/download"
@@ -95,8 +97,8 @@ Commands:
   uninstall           Remove hook only (keep instruction files)
   uninstall --full    Remove hook + revert all instruction files
   version             Show version
-  update              Download and install latest binary
-  update --reconfigure  Update + re-run configure
+  update              Download and install latest binary (runs configure after)
+  update --no-configure  Update binary only, skip configure
 
 Examples:
   ai-trailer detect                    # What AI tools are installed?
@@ -235,6 +237,7 @@ func cmdConfigure(args []string) {
 		}
 	}
 
+	warnClaudeCodeAttributionConflict()
 
 	// ── Instruction files (opt-in) ──
 	var updatedFiles []string
@@ -274,6 +277,87 @@ func cmdConfigure(args []string) {
 	fmt.Println("✅ Configuration complete!")
 	fmt.Println("\n  Verify with: git log -1 --format=\"%B\"")
 	fmt.Println("  View stats:  ai-trailer record")
+}
+
+// warnClaudeCodeAttributionConflict checks known Claude Code config files for
+// hardcoded Co-authored-by lines that would duplicate ai-trailer's own trailer.
+// When found, asks the user interactively if the attribution should be removed.
+func warnClaudeCodeAttributionConflict() {
+	home, _ := os.UserHomeDir()
+
+	type configFile struct {
+		path string
+		desc string
+	}
+	candidates := []configFile{
+		{filepath.Join(home, ".claude", "settings.json"), "~/.claude/settings.json"},
+	}
+
+	if cwd, err := os.Getwd(); err == nil {
+		candidates = append(candidates,
+			configFile{filepath.Join(cwd, ".claude", "settings.json"), ".claude/settings.json (project)"},
+		)
+	}
+
+	for _, cf := range candidates {
+		data, err := os.ReadFile(cf.path)
+		if err != nil {
+			continue
+		}
+		var matches []string
+		for _, line := range strings.Split(string(data), "\n") {
+			if strings.Contains(strings.ToLower(line), "co-authored-by") {
+				matches = append(matches, strings.TrimSpace(line))
+			}
+		}
+		if len(matches) == 0 {
+			continue
+		}
+
+		fmt.Println()
+		fmt.Printf("  ⚠  Attribution conflict detected in %s\n", cf.desc)
+		fmt.Println("     Claude Code will inject this into every commit, creating")
+		fmt.Println("     duplicates alongside ai-trailer's own trailers:")
+		fmt.Println()
+		for _, m := range matches {
+			fmt.Printf("       %s\n", m)
+		}
+		fmt.Println()
+		fmt.Print("  Remove the attribution setting now? [Y/n]: ")
+
+		reader := bufio.NewReader(os.Stdin)
+		answer, _ := reader.ReadString('\n')
+		ans := strings.ToLower(strings.TrimSpace(answer))
+		if ans == "" || ans == "y" {
+			if err := removeAttributionFromSettings(cf.path); err != nil {
+				fmt.Printf("  ✗ Could not update %s: %v\n", cf.desc, err)
+			} else {
+				fmt.Printf("  ✓ Attribution removed from %s\n", cf.desc)
+			}
+		} else {
+			fmt.Printf("  ℹ  Skipped. To fix manually: remove the Co-authored-by entry from %s\n", cf.path)
+		}
+	}
+}
+
+// removeAttributionFromSettings parses the Claude Code settings.json as JSON,
+// deletes the "attribution" and deprecated "includeCoAuthoredBy" keys, and writes it back.
+func removeAttributionFromSettings(path string) error {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return err
+	}
+	var raw map[string]json.RawMessage
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return err
+	}
+	delete(raw, "attribution")
+	delete(raw, "includeCoAuthoredBy")
+	out, err := json.MarshalIndent(raw, "", "  ")
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(path, append(out, '\n'), 0644)
 }
 
 // ── status command ──────────────────────────────────────────────────
@@ -431,10 +515,10 @@ func cmdVersion(args []string) {
 // ── update command ──────────────────────────────────────────────────
 
 func cmdUpdate(args []string) {
-	reconfigure := false
+	reconfigure := true
 	for _, a := range args {
-		if a == "--reconfigure" || a == "-r" {
-			reconfigure = true
+		if a == "--no-configure" {
+			reconfigure = false
 		}
 	}
 
@@ -543,19 +627,16 @@ func cmdUpdate(args []string) {
 
 	fmt.Println("  ✓ Binary updated")
 
-	// Reconfigure if requested
+	// Reconfigure: launch the newly installed binary's configure command so the
+	// interactive menu runs and the new hook script is what gets written to disk.
 	if reconfigure {
-		fmt.Println("\n  Re-running configuration...")
-		// Re-run configure --all
-		results := detect.DetectAll()
-		var allIDs []string
-		for _, r := range results {
-			if r.Found {
-				allIDs = append(allIDs, r.Tool.ID)
-			}
-		}
-		config.ConfigureAllInstructionFiles(allIDs)
-		config.InstallHook()
+		fmt.Println()
+		cmd := exec.Command(currentPath, "configure")
+		cmd.Stdin = os.Stdin
+		cmd.Stdout = os.Stdout
+		cmd.Stderr = os.Stderr
+		cmd.Run()
+		return
 	}
 
 	fmt.Println(strings.Repeat("─", 55))
@@ -587,15 +668,23 @@ func cmdTest(_ []string) {
 	home, _ := os.UserHomeDir()
 	var det *detection
 
+	// Detection mirrors hook_script.go priority order.
 	if m := os.Getenv("CLAUDE_MODEL"); m != "" {
 		det = &detection{tool: "claude-code", model: m, trigger: "CLAUDE_MODEL=" + m}
-	} else if s := os.Getenv("HERMES_SESSION"); s != "" {
+	} else if cc := os.Getenv("CLAUDECODE"); cc != "" {
+		det = &detection{tool: "claude-code", model: "", trigger: "CLAUDECODE=" + cc}
+	} else if ep := os.Getenv("CLAUDE_CODE_ENTRYPOINT"); ep != "" {
+		det = &detection{tool: "claude-code", model: "", trigger: "CLAUDE_CODE_ENTRYPOINT=" + ep}
+	} else if s := os.Getenv("HERMES_SESSION_ID"); s != "" {
 		m := os.Getenv("HERMES_MODEL")
-		det = &detection{tool: "hermes", model: m, trigger: "HERMES_SESSION=" + s}
-	} else if m := os.Getenv("OPENCODE_MODEL"); m != "" {
-		det = &detection{tool: "opencode", model: m, trigger: "OPENCODE_MODEL=" + m}
+		det = &detection{tool: "hermes", model: m, trigger: "HERMES_SESSION_ID=" + s}
+	} else if s := os.Getenv("HERMES_HOME"); s != "" {
+		m := os.Getenv("HERMES_MODEL")
+		det = &detection{tool: "hermes", model: m, trigger: "HERMES_HOME=" + s}
 	} else if m := os.Getenv("GEMINI_MODEL"); m != "" {
 		det = &detection{tool: "gemini-cli", model: m, trigger: "GEMINI_MODEL=" + m}
+	} else if v := os.Getenv("WINDSURF_EXTENSION_VERSION"); v != "" {
+		det = &detection{tool: "windsurf", model: "", trigger: "WINDSURF_EXTENSION_VERSION=" + v}
 	} else if t := os.Getenv("CURSOR_TRACE_ID"); t != "" {
 		sf := filepath.Join(home, ".ai-trailer", "cursor-model")
 		m := ""
@@ -623,8 +712,10 @@ func cmdTest(_ []string) {
 		"hermes":      "Co-authored-by: Hermes Agent <noreply@nousresearch.com>",
 		"opencode":    "Co-authored-by: OpenCode <noreply@opencode.ai>",
 		"gemini-cli":  "Co-authored-by: Gemini <noreply@google.com>",
+		"windsurf":    "Co-authored-by: Windsurf <noreply@codeium.com>",
 		"cursor":      "Co-authored-by: Cursor <noreply@cursor.sh>",
 		"codex":       "Co-authored-by: OpenAI Codex <noreply@openai.com>",
+		"github-copilot": "Co-authored-by: GitHub Copilot <noreply@github.com>",
 	}
 
 	fmt.Printf("  Env detected:  %s\n", det.trigger)

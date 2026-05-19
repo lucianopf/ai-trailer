@@ -68,6 +68,34 @@ func TestClaudeModelEnvAppendsTrailers(t *testing.T) {
 	assertContains(t, msg, "Ai-os:")
 }
 
+// TestClaudeCodeEnvWithoutModel covers sessions where CLAUDECODE=1 is set
+// but CLAUDE_MODEL is empty (observed in Claude Code Bash-tool invocations).
+func TestClaudeCodeEnvWithoutModel(t *testing.T) {
+	msg := runHook(t, "subject\n", "", map[string]string{
+		"CLAUDECODE":             "1",
+		"CLAUDE_CODE_ENTRYPOINT": "cli",
+	})
+
+	assertContains(t, msg, "Co-authored-by: Claude <noreply@anthropic.com>")
+	assertContains(t, msg, "Ai-tool: claude-code")
+	assertNotContains(t, msg, "Ai-model:") // no model available — expected
+	assertContains(t, msg, "Ai-os:")
+}
+
+// TestClaudeCodeModelFromNativeTrailer covers the real-world case where CLAUDE_MODEL
+// is empty but Claude Code has already injected its native Co-Authored-By trailer.
+// The model should be extracted from that line.
+func TestClaudeCodeModelFromNativeTrailer(t *testing.T) {
+	commitMsg := "subject\n\nCo-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>\n"
+	msg := runHook(t, commitMsg, "", map[string]string{
+		"CLAUDECODE": "1",
+	})
+
+	assertContains(t, msg, "Ai-tool: claude-code")
+	assertContains(t, msg, "Ai-model: claude-sonnet-4.6")
+	assertContains(t, msg, "Ai-os:")
+}
+
 func TestNoAIEnvNoTrailer(t *testing.T) {
 	msg := runHook(t, "subject\n", "", map[string]string{})
 
@@ -303,6 +331,65 @@ func TestCodexModelOverriddenFromStateDB(t *testing.T) {
 	// DB model (gpt-5.5) overrides imprecise trailer model (GPT-5 high)
 	assertContains(t, string(msg), "Ai-model: gpt-5.5")
 	assertNotContains(t, string(msg), "Ai-model: GPT-5 high")
+}
+
+// TestCodexFallbackViaProcessAndDB covers Codex versions that do NOT inject a
+// native Co-authored-by trailer. Detection falls back to: pgrep codex + state_5.sqlite.
+func TestCodexFallbackViaProcessAndDB(t *testing.T) {
+	if _, err := exec.LookPath("sqlite3"); err != nil {
+		t.Skip("sqlite3 not available")
+	}
+
+	dir := t.TempDir()
+	homeDir := filepath.Join(dir, "home")
+	codexDir := filepath.Join(homeDir, ".codex")
+	if err := os.MkdirAll(codexDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	dbPath := filepath.Join(codexDir, "state_5.sqlite")
+	setup := exec.Command("sqlite3", dbPath,
+		`CREATE TABLE threads (id TEXT, model TEXT, updated_at INTEGER);`+
+			`INSERT INTO threads VALUES ('t1', 'gpt-5.5', 1);`)
+	if out, err := setup.CombinedOutput(); err != nil {
+		t.Fatalf("sqlite3 setup: %v\n%s", err, out)
+	}
+
+	fakeBin := filepath.Join(dir, "bin")
+	if err := os.MkdirAll(fakeBin, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	// fake pgrep: only "codex" is running, not "opencode"
+	if err := os.WriteFile(filepath.Join(fakeBin, "pgrep"), []byte("#!/bin/bash\n[[ \"$*\" == *codex* ]] && exit 0 || exit 1\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	// fake find: only return a result for the codex DB path
+	if err := os.WriteFile(filepath.Join(fakeBin, "find"), []byte("#!/bin/bash\n[[ \"$*\" == *state_5.sqlite* ]] && echo found || true\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	hookPath := filepath.Join(dir, "prepare-commit-msg")
+	if err := os.WriteFile(hookPath, []byte(HookScript), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	msgPath := filepath.Join(dir, "COMMIT_EDITMSG")
+	// No native Co-authored-by trailer in message
+	if err := os.WriteFile(msgPath, []byte("docs: test\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	cmd := exec.Command("bash", hookPath, msgPath)
+	cmd.Env = []string{
+		"PATH=" + fakeBin + ":" + os.Getenv("PATH"),
+		"HOME=" + homeDir,
+	}
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("hook failed: %v\n%s", err, out)
+	}
+
+	msg, _ := os.ReadFile(msgPath)
+	assertContains(t, string(msg), "Ai-tool: codex")
+	assertContains(t, string(msg), "Ai-model: gpt-5.5")
+	assertContains(t, string(msg), "Co-authored-by: OpenAI Codex <noreply@openai.com>")
 }
 
 func TestCopilotNativeTrailerDetectsTool(t *testing.T) {

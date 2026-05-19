@@ -18,9 +18,20 @@ MODEL=""
 COAUTHOR=""
 
 # ── Env var detection (tools with guaranteed model in subprocess) ──────
-if [ -n "${CLAUDE_MODEL:-}" ]; then
+# CLAUDECODE=1 is the primary indicator; CLAUDE_MODEL holds the model name
+# when set (may be empty in some Claude Code versions or Bash-tool contexts).
+if [ -n "${CLAUDE_MODEL:-}" ] || [ -n "${CLAUDECODE:-}" ] || [ -n "${CLAUDE_CODE_ENTRYPOINT:-}" ]; then
     TOOL="claude-code"
-    MODEL="$CLAUDE_MODEL"
+    MODEL="${CLAUDE_MODEL:-}"
+    # If model is still empty, extract from Claude Code's native Co-Authored-By trailer
+    # e.g. "Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>" → "claude-sonnet-4.6"
+    if [ -z "$MODEL" ]; then
+        _cc_line=$(grep -i "Co-Authored-By: Claude " "$COMMIT_MSG_FILE" 2>/dev/null | head -1)
+        if [ -n "$_cc_line" ]; then
+            _cc_desc=$(echo "$_cc_line" | sed 's/.*Claude \([^<]*\)<.*/\1/' | sed 's/[[:space:]]*$//')
+            MODEL=$(echo "claude-$_cc_desc" | tr '[:upper:]' '[:lower:]' | tr ' ' '-')
+        fi
+    fi
 elif [ -n "${HERMES_SESSION_ID:-}${HERMES_HOME:-}${_HERMES_GATEWAY:-}" ]; then
     TOOL="hermes"
     MODEL="${HERMES_MODEL:-}"
@@ -57,7 +68,7 @@ else
     if [ -n "$_codex_line" ]; then
         TOOL="codex"
         MODEL=$(echo "$_codex_line" | sed 's/.*<\([^>]*\)>/\1/')
-        if pgrep -q "codex" 2>/dev/null \
+        if pgrep "codex" >/dev/null 2>&1 \
            && command -v sqlite3 &>/dev/null \
            && [ -f "$HOME/.codex/state_5.sqlite" ]; then
             _cx_model=$(sqlite3 "$HOME/.codex/state_5.sqlite" \
@@ -90,7 +101,7 @@ else
     # ── OpenCode: detect by active process + recent DB activity ──────────
     # Both conditions required to avoid false positives when another tool
     # commits shortly after an OpenCode session ends.
-    elif pgrep -q "opencode" 2>/dev/null \
+    elif pgrep "opencode" >/dev/null 2>&1 \
          && [ -n "$(find "$HOME/.local/share/opencode/opencode.db" -mmin -10 -type f 2>/dev/null)" ] \
          && command -v sqlite3 &>/dev/null; then
         TOOL="opencode"
@@ -100,6 +111,15 @@ else
         if [ -n "$_oc_model_json" ]; then
             MODEL=$(echo "$_oc_model_json" | sed 's/.*"id":"\([^"]*\)".*/\1/')
         fi
+    # ── Codex fallback: process + DB (for versions without native trailer) ──
+    elif pgrep "codex" >/dev/null 2>&1 \
+         && [ -n "$(find "$HOME/.codex/state_5.sqlite" -mmin -60 -type f 2>/dev/null)" ] \
+         && command -v sqlite3 &>/dev/null; then
+        TOOL="codex"
+        _cx_model=$(sqlite3 "$HOME/.codex/state_5.sqlite" \
+            "SELECT model FROM threads ORDER BY updated_at DESC LIMIT 1;" \
+            2>/dev/null)
+        [ -n "$_cx_model" ] && MODEL="$_cx_model"
     else
         # ── Session file fallback (for Codex versions without native trailer) ──
         _sf="$HOME/.ai-trailer/codex-model"

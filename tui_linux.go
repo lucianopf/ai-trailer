@@ -30,7 +30,8 @@ func makeRaw(fd int) (*termState, error) {
 	st.termios = st.old
 	st.termios.Iflag &^= syscall.IGNBRK | syscall.BRKINT | syscall.PARMRK | syscall.ISTRIP |
 		syscall.INLCR | syscall.IGNCR | syscall.ICRNL | syscall.IXON
-	st.termios.Oflag &^= syscall.OPOST
+	// Keep OPOST so ONLCR remains active: \n → \r\n without explicit \r in renderMenu.
+	// Disabling OPOST causes a staircase effect in WSL and some Linux terminals.
 	st.termios.Lflag &^= syscall.ECHO | syscall.ECHONL | syscall.ICANON | syscall.ISIG | syscall.IEXTEN
 	st.termios.Cflag &^= syscall.CSIZE | syscall.PARENB
 	st.termios.Cflag |= syscall.CS8
