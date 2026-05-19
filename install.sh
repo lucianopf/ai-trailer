@@ -77,7 +77,7 @@ main() {
     cp "${tmpfile}" "${INSTALL_DIR}/${final_name}"
     ok "Installed → ${INSTALL_DIR}/${final_name}"
 
-    # PATH check
+    # PATH warning (informational only — we run via full path regardless)
     if ! echo "${PATH}" | tr ':' '\n' | grep -qxF "${INSTALL_DIR}"; then
         echo ""
         warn "${INSTALL_DIR} is not in your PATH. Add this to your shell config:"
@@ -90,16 +90,12 @@ main() {
             */fish) echo "  → run: fish_add_path ~/.local/bin" ;;
         esac
         echo ""
-        warn "Reload your shell before running ai-trailer."
-        echo ""
     fi
 
     echo -e "${GREEN}  ✓ Installation complete!${NC}"
     echo ""
-    echo "  Run this to set up git hooks for your AI tools:"
-    echo ""
-    echo -e "    ${CYAN}ai-trailer configure${NC}"
-    echo ""
+
+    "${INSTALL_DIR}/${final_name}" configure
 }
 
 main "$@"
