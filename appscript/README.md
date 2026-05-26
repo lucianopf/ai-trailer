@@ -8,7 +8,7 @@ Google Sheets + Apps Script para rastrear **adoção de ferramentas de IA** na e
 |--------|---------------|----------------|
 | `detect` | `ai-trailer detect` | Quais ferramentas foram encontradas na máquina |
 | `configure` | `ai-trailer configure` | Ferramentas detectadas + configuradas + hook + CLAUDE.md |
-| `setup` | `ai-trailer setup --url ...` | Webhook configurado |
+| `setup` | `AI_TRAILER_WEBHOOK_URL=<URL>` (env var) | Webhook configurado |
 | `uninstall` | `ai-trailer uninstall` | Remoção da configuração |
 
 **Commits NÃO são rastreados aqui** — serão extraídos via GitHub API posteriormente.
@@ -38,4 +38,8 @@ Google Sheets + Apps Script para rastrear **adoção de ferramentas de IA** na e
 2. Colar `appscript/Code.gs` no editor
 3. Deploy → New Deployment → Web App (Anyone)
 4. Copiar URL
-5. No terminal: `ai-trailer setup --url <URL> --token <TOKEN>`
+5. Exporte as variáveis de ambiente no shell:
+   ```bash
+   export AI_TRAILER_WEBHOOK_URL="<URL>"
+   export AI_TRAILER_WEBHOOK_TOKEN="<TOKEN>"  # opcional
+   ```
