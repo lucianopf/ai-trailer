@@ -109,8 +109,8 @@ Examples:
 
 Model detection (automatic, no setup for most tools):
   Claude Code → CLAUDE_MODEL env var (inherited by git subprocess)
-  Hermes      → HERMES_SESSION + HERMES_MODEL env vars
-  OpenCode    → OPENCODE_MODEL env var
+  Hermes      → HERMES_SESSION_ID + HERMES_MODEL env vars
+  OpenCode    → processo opencode ativo + opencode.db modificado recentemente
   Gemini CLI  → GEMINI_MODEL env var
   Codex       → ~/.ai-trailer/codex-model (written by PreToolUse hook)
   Cursor      → CURSOR_TRACE_ID env var + ~/.ai-trailer/cursor-model
