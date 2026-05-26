@@ -9,7 +9,7 @@
 //   2. Deploy → New Deployment → Web App
 //      - Execute as: Me
 //      - Who has access: Anyone
-//   3. Copiar URL e rodar: ai-trailer setup --url <URL>
+//   3. Copiar URL e configurar: export AI_TRAILER_WEBHOOK_URL=<URL>
 // ═══════════════════════════════════════════════════════════════════
 
 var CONFIG = {

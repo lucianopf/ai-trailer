@@ -73,7 +73,7 @@ Regras:
 
 **`configure`:** instala o git hook globalmente + PreToolUse hooks para ferramentas que precisam de session file (Codex, Cursor). Remove:
 - `installClaudeStatusLine()` — substituído por env var direta
-- `installOpenCodePlugin()` — substituído por env var direta
+- `installOpenCodePlugin()` — substituído por detecção via processo (`pgrep opencode`) + `opencode.db` recente (⚠️ env var não implementada)
 - Campos `InstrumentTempFile` / `InstrumentSetup` nos Tool structs — substituídos pela tabela acima
 
 **`test` (novo):** roda o hook em dry-run no env atual, imprime o que seria escrito sem criar commit. Útil para debug por ferramenta.
@@ -107,7 +107,7 @@ $ ai-trailer test
 | `CURSOR_TRACE_ID=abc` + `~/.ai-trailer/cursor-model` existe com `claude-3.7-sonnet` | `Ai-tool: cursor`, `Ai-model: claude-3.7-sonnet` |
 | `CURSOR_TRACE_ID=abc` + sem session file | `Ai-tool: cursor`, sem `Ai-model` |
 | `HERMES_SESSION_ID=x` + `HERMES_MODEL=llama-3` | `Ai-tool: hermes`, `Ai-model: llama-3` |
-| Duas vars presentes (`CLAUDE_MODEL` + `HERMES_SESSION`) | Prioridade da ordem da tabela (Claude vence) |
+| Duas vars presentes (`CLAUDE_MODEL` + `HERMES_SESSION_ID`) | Prioridade da ordem da tabela (Claude vence) |
 | `CURSOR_TRACE_ID` + session file com conteúdo vazio | sem `Ai-model` |
 
 ---
